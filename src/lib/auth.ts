@@ -32,7 +32,10 @@ function verify(signed: string): string | null {
 export function verifyPassword(password: string): boolean {
   const adminPassword = process.env.ADMIN_PASSWORD;
   if (!adminPassword) return false;
-  return password === adminPassword;
+  const a = Buffer.from(password);
+  const b = Buffer.from(adminPassword);
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 export async function createSession(): Promise<void> {
