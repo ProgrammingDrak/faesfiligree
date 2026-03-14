@@ -32,6 +32,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const items = useCartStore((s) => s.items);
   const getTotal = useCartStore((s) => s.getTotal);
+  const clearCart = useCartStore((s) => s.clearCart);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sdkReady, setSdkReady] = useState(false);
@@ -100,6 +101,7 @@ export default function CheckoutPage() {
       }
 
       if (result.success) {
+        clearCart();
         router.push("/checkout/success");
       }
     } catch {
