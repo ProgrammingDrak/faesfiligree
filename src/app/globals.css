@@ -14,7 +14,7 @@
   --color-rose-gold: #B76E79;
   --color-rose-gold-light: #D4929B;
 
-  /* Fonts */
+  /* Fonts — loaded via Google Fonts <link> in layout.tsx */
   --font-heading: "Cormorant Garamond", serif;
   --font-body: "Jost", sans-serif;
 
