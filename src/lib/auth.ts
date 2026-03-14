@@ -5,7 +5,14 @@ const SESSION_COOKIE = "admin_session";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
 function getSecret(): string {
-  return process.env.ADMIN_SESSION_SECRET || "dev-secret-change-me";
+  const secret = process.env.ADMIN_SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("ADMIN_SESSION_SECRET must be set in production");
+    }
+    return "dev-secret-change-me";
+  }
+  return secret;
 }
 
 function sign(value: string): string {
