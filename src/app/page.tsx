@@ -1,9 +1,24 @@
-export default function Home() {
+import { Hero, FeaturedPieces } from "@/components/home";
+import {
+  getFeaturedProducts,
+  getFeaturedGalleryPieces,
+  getSiteSettings,
+} from "@/lib/sanity/queries";
+
+export default async function Home() {
+  const [products, galleryPieces, settings] = await Promise.all([
+    getFeaturedProducts(),
+    getFeaturedGalleryPieces(),
+    getSiteSettings(),
+  ]);
+
   return (
-    <main>
-      <h1 className="font-heading text-4xl text-center py-20">
-        Fae&apos;s Filigree
-      </h1>
-    </main>
+    <>
+      <Hero
+        heading={settings.heroHeading}
+        subheading={settings.heroSubheading}
+      />
+      <FeaturedPieces products={products} galleryPieces={galleryPieces} />
+    </>
   );
 }
