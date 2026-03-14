@@ -1,5 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { isAuthenticatedSync } from "@/lib/auth";
+
+function getExpectedToken(): string {
+  const secret = process.env.ADMIN_SESSION_SECRET || "dev-secret-change-me";
+  return `session_${secret}`;
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -12,7 +16,7 @@ export function middleware(request: NextRequest) {
   // Protect all other admin routes
   if (pathname.startsWith("/admin")) {
     const session = request.cookies.get("admin_session")?.value;
-    if (!isAuthenticatedSync(session)) {
+    if (!session || session !== getExpectedToken()) {
       const loginUrl = new URL("/admin/login", request.url);
       return NextResponse.redirect(loginUrl);
     }

@@ -11,7 +11,7 @@ export async function loginAction(_prev: unknown, formData: FormData) {
   }
 
   await createSession();
-  redirect("/admin");
+  return { success: true };
 }
 
 export async function logoutAction() {
