@@ -3,7 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider  = "postgresql"
+  url       = env("filigree_POSTGRES_PRISMA_URL")
+  directUrl = env("filigree_DATABASE_URL_UNPOOLED")
 }
 
 model Category {
