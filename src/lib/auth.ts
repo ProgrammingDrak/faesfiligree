@@ -62,8 +62,3 @@ export async function isAuthenticated(): Promise<boolean> {
   if (!session) return false;
   return verify(session.value) !== null;
 }
-
-export function isAuthenticatedSync(cookieValue: string | undefined): boolean {
-  if (!cookieValue) return false;
-  return verify(cookieValue) !== null;
-}
