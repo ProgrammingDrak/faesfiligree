@@ -9,6 +9,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Protect admin API routes (return 401 instead of redirect)
+  if (pathname.startsWith("/api/admin")) {
+    const session = request.cookies.get("admin_session")?.value;
+    if (!isAuthenticatedSync(session)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.next();
+  }
+
   // Protect all other admin routes
   if (pathname.startsWith("/admin")) {
     const session = request.cookies.get("admin_session")?.value;
@@ -22,5 +31,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/admin/:path*"],
 };
