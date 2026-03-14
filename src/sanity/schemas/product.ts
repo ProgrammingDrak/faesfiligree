@@ -92,12 +92,6 @@ export const product = defineType({
       type: "boolean",
       initialValue: false,
     }),
-    defineField({
-      name: "stripePriceId",
-      title: "Stripe Price ID",
-      type: "string",
-      description: "The Stripe Price ID for this product (e.g., price_xxx)",
-    }),
   ],
   preview: {
     select: {

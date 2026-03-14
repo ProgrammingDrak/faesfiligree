@@ -38,7 +38,6 @@ export interface Product {
   dimensions?: string;
   inStock: boolean;
   featured: boolean;
-  stripePriceId?: string;
 }
 
 export interface GalleryPiece {

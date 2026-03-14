@@ -211,7 +211,6 @@ const PRODUCT_FIELDS = `
   dimensions,
   inStock,
   featured,
-  stripePriceId
 `;
 
 const GALLERY_PIECE_FIELDS = `
