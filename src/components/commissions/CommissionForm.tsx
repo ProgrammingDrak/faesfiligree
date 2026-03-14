@@ -17,6 +17,7 @@ const step2Schema = z.object({
   pieceType: z.string().min(1, "Please select a piece type"),
   stylePreferences: z.array(z.string()).min(1, "Please select at least one style"),
   materials: z.array(z.string()).optional(),
+  size: z.string().optional(),
 });
 
 const step3Schema = z.object({
@@ -39,6 +40,48 @@ const PIECE_TYPES = [
   { value: "other", label: "Other" },
 ];
 
+const SIZE_OPTIONS: Record<string, { value: string; label: string; example: string }[]> = {
+  ring: [
+    { value: "small", label: "Small (5–6)", example: "Pinky ring or delicate band" },
+    { value: "medium", label: "Medium (7–8)", example: "Standard fit for most fingers" },
+    { value: "large", label: "Large (9–10)", example: "Bold statement ring" },
+    { value: "custom", label: "Custom Size", example: "Specify your exact ring size" },
+  ],
+  necklace: [
+    { value: "choker", label: "Choker (14–16\")", example: "Sits snug around the neck" },
+    { value: "princess", label: "Princess (17–19\")", example: "Classic length, rests on the collarbone" },
+    { value: "matinee", label: "Matinee (20–24\")", example: "Falls just above the bust" },
+    { value: "opera", label: "Opera (28–36\")", example: "Long, elegant draping length" },
+  ],
+  earrings: [
+    { value: "stud", label: "Stud / Petite", example: "Small and close to the earlobe" },
+    { value: "drop", label: "Drop (1–2\")", example: "Hangs just below the earlobe" },
+    { value: "dangle", label: "Dangle (2–3\")", example: "Swings freely with movement" },
+    { value: "shoulder", label: "Shoulder Duster (3\"+)", example: "Dramatic length near the shoulders" },
+  ],
+  bracelet: [
+    { value: "small", label: "Small (6–6.5\")", example: "Snug fit for petite wrists" },
+    { value: "medium", label: "Medium (7–7.5\")", example: "Standard fit for most wrists" },
+    { value: "large", label: "Large (8–8.5\")", example: "Relaxed fit or larger wrists" },
+    { value: "custom", label: "Custom Size", example: "Specify your wrist measurement" },
+  ],
+  brooch: [
+    { value: "small", label: "Small (1–1.5\")", example: "Subtle lapel or collar accent" },
+    { value: "medium", label: "Medium (2–2.5\")", example: "Classic brooch size for scarves or jackets" },
+    { value: "large", label: "Large (3\"+)", example: "Bold centerpiece statement" },
+  ],
+  "hair-piece": [
+    { value: "small", label: "Small", example: "Single pin or small comb accent" },
+    { value: "medium", label: "Medium", example: "Hair comb or clip with moderate detail" },
+    { value: "large", label: "Large", example: "Full tiara, crown, or vine piece" },
+  ],
+  other: [
+    { value: "small", label: "Small", example: "Compact or miniature piece" },
+    { value: "medium", label: "Medium", example: "Moderate size, fits in your hand" },
+    { value: "large", label: "Large", example: "Larger decorative or statement piece" },
+  ],
+};
+
 const STYLE_OPTIONS = [
   "Delicate / Minimalist",
   "Bold / Statement",
@@ -58,6 +101,7 @@ interface FormData {
   pieceType: string;
   stylePreferences: string[];
   materials: string[];
+  size: string;
   budgetRange: string;
   timeline: string;
   targetDate: string;
@@ -77,6 +121,7 @@ export function CommissionForm() {
     pieceType: "",
     stylePreferences: [],
     materials: [],
+    size: "",
     budgetRange: "",
     timeline: "",
     targetDate: "",
@@ -146,6 +191,8 @@ export function CommissionForm() {
     }
   };
 
+  const sizeOptions = formData.pieceType ? SIZE_OPTIONS[formData.pieceType] || SIZE_OPTIONS.other : null;
+
   return (
     <div className="max-w-2xl mx-auto">
       {/* Progress indicator */}
@@ -214,7 +261,10 @@ export function CommissionForm() {
             label="Type of Piece"
             id="pieceType"
             value={formData.pieceType}
-            onChange={(e) => updateField("pieceType", e.target.value)}
+            onChange={(e) => {
+              updateField("pieceType", e.target.value);
+              updateField("size", "");
+            }}
             options={PIECE_TYPES}
             placeholder="Select a piece type..."
             error={errors.pieceType}
@@ -270,6 +320,44 @@ export function CommissionForm() {
               ))}
             </div>
           </div>
+
+          {/* Size selection — shown after a piece type is selected */}
+          {sizeOptions && (
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-2">
+                Size
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {sizeOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => updateField("size", option.value)}
+                    className={cn(
+                      "text-left p-3 rounded-lg border transition-all",
+                      formData.size === option.value
+                        ? "border-copper bg-copper/10"
+                        : "border-charcoal/10 hover:border-copper/40"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "block text-sm font-medium",
+                        formData.size === option.value
+                          ? "text-copper"
+                          : "text-charcoal"
+                      )}
+                    >
+                      {option.label}
+                    </span>
+                    <span className="block text-xs text-charcoal/50 mt-0.5">
+                      {option.example}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

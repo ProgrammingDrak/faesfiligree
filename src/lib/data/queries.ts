@@ -338,6 +338,8 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     heroHeading: settings.heroHeading,
     heroSubheading: settings.heroSubheading,
     aboutContent: settings.aboutContent ?? undefined,
+    creatorName: (settings as Record<string, unknown>).creatorName as string | undefined,
+    creatorImage: (settings as Record<string, unknown>).creatorImage as string | undefined,
     processSteps: (settings.processSteps as unknown as SiteSettings["processSteps"]) ?? undefined,
     contactEmail: settings.contactEmail ?? undefined,
     socialLinks: (settings.socialLinks as unknown as SiteSettings["socialLinks"]) ?? undefined,

@@ -64,6 +64,8 @@ export interface SiteSettings {
   heroHeading: string;
   heroSubheading: string;
   aboutContent?: string;
+  creatorName?: string;
+  creatorImage?: string;
   processSteps?: ProcessStep[];
   contactEmail?: string;
   socialLinks?: SocialLink[];

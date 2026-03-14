@@ -6,15 +6,11 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { NAV_LINKS, SITE_NAME } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { useCartStore } from "@/stores/cart";
-import { CartDrawer } from "@/components/cart";
 
 export function Navbar() {
   const pathname = usePathname();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const itemCount = useCartStore((s) => s.getItemCount());
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -68,18 +64,6 @@ export function Navbar() {
                 )}
               </Link>
             ))}
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="ml-4 relative px-4 py-2 text-sm font-body text-charcoal hover:text-copper transition-colors"
-              aria-label="Shopping cart"
-            >
-              Cart
-              {itemCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-copper text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
-                  {itemCount}
-                </span>
-              )}
-            </button>
           </div>
 
           {/* Mobile Hamburger */}
@@ -151,7 +135,6 @@ export function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </nav>
   );
 }
