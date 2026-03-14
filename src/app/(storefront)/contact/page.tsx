@@ -3,19 +3,31 @@
 import { useState } from "react";
 import { Button, Input, Textarea, ScrollReveal } from "@/components/ui";
 import { SOCIAL_LINKS } from "@/lib/constants";
+import { submitContactForm } from "@/lib/actions/contact";
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: "", email: "", message: "" });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
+    setError(null);
 
-    // In production, this would be a Server Action sending an email
-    // or creating a document in Sanity
-    await new Promise((r) => setTimeout(r, 1000));
+    const formData = new FormData();
+    formData.set("name", form.name);
+    formData.set("email", form.email);
+    formData.set("message", form.message);
+
+    const result = await submitContactForm(formData);
+
+    if (result.error) {
+      setError(result.error);
+      setSubmitting(false);
+      return;
+    }
 
     setSubmitted(true);
     setSubmitting(false);
@@ -91,6 +103,9 @@ export default function ContactPage() {
                 placeholder="What's on your mind?"
                 rows={5}
               />
+              {error && (
+                <p className="text-red-600 text-sm">{error}</p>
+              )}
               <Button type="submit" loading={submitting} className="w-full">
                 Send Message
               </Button>

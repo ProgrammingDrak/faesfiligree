@@ -97,6 +97,14 @@ model Commission {
   updatedAt        DateTime @updatedAt
 }
 
+model ContactMessage {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  message   String
+  createdAt DateTime @default(now())
+}
+
 model SiteSettings {
   id             String   @id @default("singleton")
   heroHeading    String   @default("Handcrafted with Enchantment")
