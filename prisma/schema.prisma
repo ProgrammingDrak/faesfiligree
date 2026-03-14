@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Category {
+  id          String         @id @default(cuid())
+  title       String
+  slug        String         @unique
+  description String?
+  products    Product[]
+  gallery     GalleryPiece[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model Material {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  unit        String            @default("unit")
+  costPerUnit Int               @default(0)
+  products    ProductMaterial[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model Product {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String            @unique
+  description      String?
+  price            Int
+  images           String[]
+  categoryId       String?
+  category         Category?         @relation(fields: [categoryId], references: [id])
+  materials        String[]
+  dimensions       String?
+  inStock          Boolean           @default(true)
+  featured         Boolean           @default(false)
+  materialCostLump Int?
+  laborHours       Float             @default(0)
+  soldCount        Int               @default(0)
+  soldRevenue      Int               @default(0)
+  productMaterials ProductMaterial[]
+  sales            Sale[]
+  eventInventory   EventInventory[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model ProductMaterial {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  materialId String
+  material   Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  quantity   Float    @default(1)
+
+  @@unique([productId, materialId])
+}
+
+model GalleryPiece {
+  id           String    @id @default(cuid())
+  title        String
+  slug         String    @unique
+  images       String[]
+  description  String?
+  categoryId   String?
+  category     Category? @relation(fields: [categoryId], references: [id])
+  materials    String[]
+  year         Int?
+  isSold       Boolean   @default(false)
+  isCommission Boolean   @default(false)
+  featured     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Commission {
+  id               String   @id @default(cuid())
+  name             String
+  email            String
+  pieceType        String?
+  stylePreferences String[]
+  materials        String[]
+  budgetRange      String?
+  timeline         String?
+  targetDate       String?
+  description      String?
+  referenceImages  String[]
+  status           String   @default("pending")
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model SiteSettings {
+  id             String   @id @default("singleton")
+  heroHeading    String   @default("Handcrafted with Enchantment")
+  heroSubheading String   @default("")
+  aboutContent   String?
+  processSteps   Json?
+  contactEmail   String?
+  socialLinks    Json?
+  announcementBar String?
+  shippingInfo   String?
+  returnPolicy   String?
+  laborRate      Int      @default(2500)
+  updatedAt      DateTime @updatedAt
+}
+
+model Event {
+  id        String           @id @default(cuid())
+  name      String
+  startDate DateTime
+  endDate   DateTime?
+  location  String?
+  notes     String?
+  expenses  EventExpense[]
+  inventory EventInventory[]
+  sales     Sale[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model EventExpense {
+  id          String @id @default(cuid())
+  eventId     String
+  event       Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  category    String
+  description String?
+  amount      Int
+}
+
+model EventInventory {
+  id              String  @id @default(cuid())
+  eventId         String
+  event           Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantityBrought Int     @default(0)
+  quantitySold    Int     @default(0)
+  priceAtEvent    Int
+
+  @@unique([eventId, productId])
+}
+
+model Sale {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  eventId   String?
+  event     Event?   @relation(fields: [eventId], references: [id])
+  quantity  Int      @default(1)
+  price     Int
+  date      DateTime @default(now())
+}

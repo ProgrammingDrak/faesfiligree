@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors */
+  --color-parchment: #FAF3E8;
+  --color-parchment-dark: #F0E6D4;
+  --color-charcoal: #2B2B2B;
+  --color-copper: #B87333;
+  --color-copper-light: #D4955A;
+  --color-copper-dark: #8B5A2B;
+  --color-velvet: #1A1A1A;
+  --color-velvet-light: #2A2A2A;
+  --color-warm-white: #F5F0EB;
+  --color-rose-gold: #B76E79;
+  --color-rose-gold-light: #D4929B;
+
+  /* Fonts */
+  --font-heading: "Cormorant Garamond", serif;
+  --font-body: "Jost", sans-serif;
+
+  /* Animation durations */
+  --animate-shimmer: shimmer 600ms ease-in-out;
+  --animate-sparkle: sparkle 2s ease-in-out infinite;
+  --animate-drift: drift 6s ease-in-out infinite;
+  --animate-fade-in-up: fade-in-up 0.6s ease-out;
+  --animate-wire-draw: wire-draw 2s ease-in-out forwards;
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%) rotate(-15deg); }
+    100% { transform: translateX(200%) rotate(-15deg); }
+  }
+
+  @keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1) rotate(180deg); }
+  }
+
+  @keyframes drift {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(10px, -15px); }
+    50% { transform: translate(-5px, -25px); }
+    75% { transform: translate(-15px, -10px); }
+  }
+
+  @keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes wire-draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+/* Base styles */
+body {
+  font-family: var(--font-body);
+  color: var(--color-charcoal);
+  background-color: var(--color-parchment);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}
+
+/* Custom cursor - only on devices with hover */
+@media (hover: hover) {
+  .custom-cursor-active * {
+    cursor: none !important;
+  }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-parchment);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-copper);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-copper-dark);
+}
