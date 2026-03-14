@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import type { GalleryPiece } from "@/lib/sanity/types";
+import type { GalleryPiece } from "@/lib/data/types";
 
 interface GalleryItemProps {
   piece: GalleryPiece;

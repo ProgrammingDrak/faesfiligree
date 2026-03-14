@@ -1,7 +1,7 @@
 import { ImageGallery } from "./ImageGallery";
 import { AddToCartButton } from "./AddToCartButton";
 import { formatPrice } from "@/lib/utils";
-import type { Product } from "@/lib/sanity/types";
+import type { Product } from "@/lib/data/types";
 
 interface ProductDetailProps {
   product: Product;

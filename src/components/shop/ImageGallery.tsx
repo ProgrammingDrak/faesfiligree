@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { SanityImage } from "@/lib/sanity/types";
-
 interface ImageGalleryProps {
-  images: SanityImage[];
+  images: string[];
   productName: string;
 }
 

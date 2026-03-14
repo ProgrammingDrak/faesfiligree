@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
-import type { Category } from "@/lib/sanity/types";
+import type { Category } from "@/lib/data/types";
 
 interface GalleryFilterProps {
   categories: Category[];

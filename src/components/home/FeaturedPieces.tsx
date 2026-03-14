@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ScrollReveal, ShimmerEffect } from "@/components/ui";
-import type { Product, GalleryPiece } from "@/lib/sanity/types";
+import type { Product, GalleryPiece } from "@/lib/data/types";
 import { formatPrice } from "@/lib/utils";
 
 interface FeaturedPiecesProps {

@@ -1,7 +1,7 @@
 "use server";
 
 import { squareClient, isSquareConfigured } from "./client";
-import { getProductBySlug } from "@/lib/sanity/queries";
+import { getProductBySlug } from "@/lib/data/queries";
 
 interface CheckoutItem {
   slug: string;

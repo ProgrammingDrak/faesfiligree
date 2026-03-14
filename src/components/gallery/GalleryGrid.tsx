@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { GalleryItem } from "./GalleryItem";
-import type { GalleryPiece } from "@/lib/sanity/types";
+import type { GalleryPiece } from "@/lib/data/types";
 
 interface GalleryGridProps {
   pieces: GalleryPiece[];

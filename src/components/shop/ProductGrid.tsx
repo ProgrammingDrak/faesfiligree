@@ -1,6 +1,6 @@
 import { ProductCard } from "./ProductCard";
 import { ScrollReveal } from "@/components/ui";
-import type { Product } from "@/lib/sanity/types";
+import type { Product } from "@/lib/data/types";
 
 interface ProductGridProps {
   products: Product[];

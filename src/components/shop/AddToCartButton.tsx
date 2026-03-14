@@ -4,7 +4,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui";
 import { useCartStore } from "@/stores/cart";
-import type { Product } from "@/lib/sanity/types";
+import type { Product } from "@/lib/data/types";
 
 interface AddToCartButtonProps {
   product: Product;

@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { getProductSlugs } from "@/lib/sanity/queries";
+import { getProductSlugs } from "@/lib/data/queries";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://faesfiligree.com";

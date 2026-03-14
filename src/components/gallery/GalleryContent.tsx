@@ -4,7 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useMemo } from "react";
 import { GalleryFilter } from "./GalleryFilter";
 import { GalleryGrid } from "./GalleryGrid";
-import type { GalleryPiece, Category } from "@/lib/sanity/types";
+import type { GalleryPiece, Category } from "@/lib/data/types";
 
 interface GalleryContentProps {
   pieces: GalleryPiece[];
