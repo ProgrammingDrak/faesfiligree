@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/db";
+import { prisma, isDatabaseConfigured } from "@/lib/db";
 
 export async function createCommission(formData: FormData) {
   const name = formData.get("name") as string;
@@ -15,6 +15,10 @@ export async function createCommission(formData: FormData) {
 
   if (!name?.trim() || !email?.trim()) {
     return { error: "Name and email are required" };
+  }
+
+  if (!isDatabaseConfigured()) {
+    return { error: "Database is not configured. Commission requests are unavailable." };
   }
 
   await prisma.commission.create({
@@ -39,6 +43,10 @@ export async function updateCommissionStatus(
   status: string,
   notes?: string
 ) {
+  if (!isDatabaseConfigured()) {
+    return { error: "Database is not configured." };
+  }
+
   await prisma.commission.update({
     where: { id },
     data: { status, ...(notes !== undefined ? { notes } : {}) },
