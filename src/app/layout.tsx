@@ -1,20 +1,6 @@
 import type { Metadata } from "next";
-import { Cormorant_Garamond, Jost } from "next/font/google";
 import { Navbar, Footer, CustomCursor } from "@/components/layout";
 import "./globals.css";
-
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-heading",
-  display: "swap",
-});
-
-const jost = Jost({
-  subsets: ["latin"],
-  variable: "--font-body",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -31,8 +17,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${cormorant.variable} ${jost.variable}`}>
-      <body className="min-h-screen bg-parchment text-charcoal font-body antialiased">
+    <html lang="en">
+      <head>
+        {/*
+          In production with Google Fonts access, replace with next/font/google:
+          import { Cormorant_Garamond, Jost } from "next/font/google"
+          and add className variables to <html>. For now, fonts are defined
+          in globals.css with system fallbacks.
+        */}
+      </head>
+      <body className="min-h-screen bg-parchment text-charcoal antialiased">
         <CustomCursor />
         <Navbar />
         <main className="pt-16 sm:pt-20">{children}</main>
