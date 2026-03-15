@@ -1,10 +1,26 @@
 import { PrismaClient } from "@prisma/client";
+import { PrismaNeon } from "@prisma/adapter-neon";
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
+function getDatabaseUrl(): string | undefined {
+  return (
+    process.env.DATABASE_URL ??
+    process.env.filigree_POSTGRES_PRISMA_URL ??
+    process.env.filigree_DATABASE_URL
+  );
+}
+
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
 
 export function getPrisma(): PrismaClient {
   if (!globalForPrisma.prisma) {
-    globalForPrisma.prisma = new PrismaClient();
+    const url = getDatabaseUrl();
+    if (!url) {
+      throw new Error("DATABASE_URL is not configured");
+    }
+    const adapter = new PrismaNeon({ connectionString: url });
+    globalForPrisma.prisma = new PrismaClient({ adapter });
   }
   return globalForPrisma.prisma;
 }
@@ -17,5 +33,5 @@ export const prisma = new Proxy({} as PrismaClient, {
 });
 
 export function isDatabaseConfigured(): boolean {
-  return !!process.env.DATABASE_URL;
+  return !!getDatabaseUrl();
 }
