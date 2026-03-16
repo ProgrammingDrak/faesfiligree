@@ -19,6 +19,24 @@ export default function AdminLoginPage() {
         <form action={formAction} className="space-y-4">
           <div>
             <label
+              htmlFor="email"
+              className="block text-sm text-warm-white/70 mb-1"
+            >
+              Email
+            </label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              autoFocus
+              className="w-full px-4 py-3 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white placeholder:text-warm-white/30 focus:outline-none focus:ring-2 focus:ring-copper focus:border-transparent"
+              placeholder="admin@example.com"
+            />
+          </div>
+
+          <div>
+            <label
               htmlFor="password"
               className="block text-sm text-warm-white/70 mb-1"
             >
@@ -29,9 +47,8 @@ export default function AdminLoginPage() {
               name="password"
               type="password"
               required
-              autoFocus
               className="w-full px-4 py-3 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white placeholder:text-warm-white/30 focus:outline-none focus:ring-2 focus:ring-copper focus:border-transparent"
-              placeholder="Enter admin password"
+              placeholder="Enter your password"
             />
           </div>
 

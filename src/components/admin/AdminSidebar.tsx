@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/lib/actions/auth";
 
@@ -15,6 +16,7 @@ const navItems = [
   { href: "/admin/events", label: "Events", icon: "calendar" },
   { href: "/admin/analytics", label: "Analytics", icon: "chart" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
+  { href: "/admin/users", label: "Users", icon: "users" },
 ];
 
 function NavIcon({ name }: { name: string }) {
@@ -28,6 +30,7 @@ function NavIcon({ name }: { name: string }) {
     calendar: "M3 6a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6zM16 2v4M8 2v4M3 10h18",
     chart: "M18 20V10M12 20V4M6 20v-6",
     settings: "M12 15a3 3 0 100-6 3 3 0 000 6z",
+    users: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75",
   };
 
   return (
@@ -46,8 +49,21 @@ function NavIcon({ name }: { name: string }) {
   );
 }
 
+interface CurrentUser {
+  name: string;
+  email: string;
+}
+
 export function AdminSidebar() {
   const pathname = usePathname();
+  const [user, setUser] = useState<CurrentUser | null>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setUser)
+      .catch(() => {});
+  }, []);
 
   return (
     <aside className="w-56 bg-charcoal min-h-screen flex flex-col border-r border-warm-white/10">
@@ -84,6 +100,17 @@ export function AdminSidebar() {
       </nav>
 
       <div className="p-4 border-t border-warm-white/10">
+        {user && (
+          <Link
+            href="/admin/account"
+            className="block mb-3 hover:bg-warm-white/5 rounded-lg p-2 -mx-2 transition-colors"
+          >
+            <p className="text-warm-white text-sm font-medium truncate">
+              {user.name}
+            </p>
+            <p className="text-warm-white/40 text-xs truncate">{user.email}</p>
+          </Link>
+        )}
         <form action={logoutAction}>
           <button
             type="submit"
