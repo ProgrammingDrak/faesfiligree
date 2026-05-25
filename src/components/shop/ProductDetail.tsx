@@ -8,6 +8,14 @@ interface ProductDetailProps {
 }
 
 export function ProductDetail({ product }: ProductDetailProps) {
+  const bulkUnitPrice = product.bulkPricingEnabled
+    ? product.bulkPricingMode === "fixed"
+      ? product.bulkUnitPrice
+      : product.bulkDiscountPercent != null
+        ? Math.round(product.price * (1 - product.bulkDiscountPercent / 100))
+        : null
+    : null;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16">
       {/* Images */}
@@ -22,6 +30,17 @@ export function ProductDetail({ product }: ProductDetailProps) {
         <p className="text-2xl text-copper font-medium mt-3">
           {formatPrice(product.price)}
         </p>
+
+        {product.bulkPricingEnabled && product.bulkMinQuantity && bulkUnitPrice && (
+          <div className="mt-3 rounded-lg border border-copper/20 bg-copper/10 px-4 py-3 text-sm text-copper-dark">
+            <p className="font-medium">
+              Buy {product.bulkMinQuantity}+ for {formatPrice(bulkUnitPrice)} each
+            </p>
+            {product.bulkPricingNotes && (
+              <p className="mt-1 text-charcoal/60">{product.bulkPricingNotes}</p>
+            )}
+          </div>
+        )}
 
         {!product.inStock && (
           <span className="inline-block mt-2 text-sm text-rose-gold bg-rose-gold/10 px-3 py-1 rounded-full w-fit">
@@ -68,15 +87,6 @@ export function ProductDetail({ product }: ProductDetailProps) {
               A lovingly handcrafted piece, unique in its details and character.
               Each element is carefully shaped, woven, and polished by hand.
             </p>
-          </div>
-        )}
-
-        {/* Category */}
-        {product.category && (
-          <div className="mt-4">
-            <span className="text-sm text-charcoal/50">
-              Category: {product.category.title}
-            </span>
           </div>
         )}
 

@@ -1,27 +1,13 @@
 import { prisma, isDatabaseConfigured } from "@/lib/db";
+import { getLocalPublicGalleryPieces, hasLocalGalleryData } from "@/lib/local-gallery";
 import type {
   Product,
   GalleryPiece,
-  Category,
   SiteSettings,
   CommissionRequest,
 } from "./types";
 
 // ── Helper: Map Prisma results to legacy type shapes ──────────────────
-
-function mapCategory(c: {
-  id: string;
-  title: string;
-  slug: string;
-  description: string | null;
-}): Category {
-  return {
-    _id: c.id,
-    title: c.title,
-    slug: { current: c.slug },
-    description: c.description ?? undefined,
-  };
-}
 
 function mapProduct(p: {
   id: string;
@@ -29,8 +15,13 @@ function mapProduct(p: {
   slug: string;
   description: string | null;
   price: number;
+  bulkPricingEnabled?: boolean;
+  bulkMinQuantity?: number | null;
+  bulkPricingMode?: string | null;
+  bulkDiscountPercent?: number | null;
+  bulkUnitPrice?: number | null;
+  bulkPricingNotes?: string | null;
   images: string[];
-  category: { id: string; title: string; slug: string; description: string | null } | null;
   materials: string[];
   dimensions: string | null;
   inStock: boolean;
@@ -42,8 +33,13 @@ function mapProduct(p: {
     slug: { current: p.slug },
     description: p.description ?? undefined,
     price: p.price,
+    bulkPricingEnabled: p.bulkPricingEnabled,
+    bulkMinQuantity: p.bulkMinQuantity ?? undefined,
+    bulkPricingMode: p.bulkPricingMode ?? undefined,
+    bulkDiscountPercent: p.bulkDiscountPercent ?? undefined,
+    bulkUnitPrice: p.bulkUnitPrice ?? undefined,
+    bulkPricingNotes: p.bulkPricingNotes ?? undefined,
     images: p.images,
-    category: p.category ? mapCategory(p.category) : undefined,
     materials: p.materials,
     dimensions: p.dimensions ?? undefined,
     inStock: p.inStock,
@@ -57,7 +53,6 @@ function mapGalleryPiece(g: {
   slug: string;
   images: string[];
   description: string | null;
-  category: { id: string; title: string; slug: string; description: string | null } | null;
   materials: string[];
   year: number | null;
   isSold: boolean;
@@ -70,7 +65,6 @@ function mapGalleryPiece(g: {
     slug: { current: g.slug },
     images: g.images,
     description: g.description ?? undefined,
-    category: g.category ? mapCategory(g.category) : undefined,
     materials: g.materials,
     year: g.year ?? undefined,
     isSold: g.isSold,
@@ -81,14 +75,6 @@ function mapGalleryPiece(g: {
 
 // ── Mock Data ──────────────────────────────────────────────────────────
 
-const MOCK_CATEGORIES: Category[] = [
-  { _id: "cat-1", title: "Rings", slug: { current: "rings" }, description: "Handcrafted rings" },
-  { _id: "cat-2", title: "Necklaces", slug: { current: "necklaces" }, description: "Elegant necklaces" },
-  { _id: "cat-3", title: "Earrings", slug: { current: "earrings" }, description: "Delicate earrings" },
-  { _id: "cat-4", title: "Bracelets", slug: { current: "bracelets" }, description: "Woven bracelets" },
-  { _id: "cat-5", title: "Brooches", slug: { current: "brooches" }, description: "Ornate brooches" },
-];
-
 const MOCK_PRODUCTS: Product[] = [
   {
     _id: "prod-1",
@@ -96,7 +82,6 @@ const MOCK_PRODUCTS: Product[] = [
     slug: { current: "moonlit-copper-vine-ring" },
     price: 4500,
     images: [],
-    category: MOCK_CATEGORIES[0],
     materials: ["Copper", "Crystal"],
     dimensions: "Size 7, band width 3mm",
     inStock: true,
@@ -108,7 +93,6 @@ const MOCK_PRODUCTS: Product[] = [
     slug: { current: "enchanted-forest-pendant" },
     price: 7800,
     images: [],
-    category: MOCK_CATEGORIES[1],
     materials: ["Sterling Silver", "Gemstone"],
     dimensions: 'Pendant 25mm, chain 18"',
     inStock: true,
@@ -120,7 +104,6 @@ const MOCK_PRODUCTS: Product[] = [
     slug: { current: "dewdrop-crystal-earrings" },
     price: 3200,
     images: [],
-    category: MOCK_CATEGORIES[2],
     materials: ["Gold-filled", "Crystal"],
     dimensions: "Drop length 35mm",
     inStock: true,
@@ -132,7 +115,6 @@ const MOCK_PRODUCTS: Product[] = [
     slug: { current: "woven-starlight-bracelet" },
     price: 5600,
     images: [],
-    category: MOCK_CATEGORIES[3],
     materials: ["Copper", "Pearl"],
     dimensions: '7" adjustable',
     inStock: true,
@@ -144,7 +126,6 @@ const MOCK_PRODUCTS: Product[] = [
     slug: { current: "autumn-leaf-brooch" },
     price: 4200,
     images: [],
-    category: MOCK_CATEGORIES[4],
     materials: ["Brass", "Gemstone"],
     dimensions: "45mm x 30mm",
     inStock: true,
@@ -156,7 +137,6 @@ const MOCK_PRODUCTS: Product[] = [
     slug: { current: "faes-whisper-choker" },
     price: 8900,
     images: [],
-    category: MOCK_CATEGORIES[1],
     materials: ["Sterling Silver", "Pearl"],
     dimensions: '14-16" adjustable',
     inStock: false,
@@ -171,7 +151,6 @@ const MOCK_GALLERY_PIECES: GalleryPiece[] = [
     slug: { current: "titanias-crown" },
     images: [],
     description: "An ornate copper crown inspired by the fairy queen, with woven vine motifs and crystal accents.",
-    category: MOCK_CATEGORIES[0],
     materials: ["Copper", "Crystal"],
     year: 2024,
     isSold: true,
@@ -184,7 +163,6 @@ const MOCK_GALLERY_PIECES: GalleryPiece[] = [
     slug: { current: "serpentine-river-necklace" },
     images: [],
     description: "A flowing silver chain with interlocking wave patterns, evoking the movement of water over stones.",
-    category: MOCK_CATEGORIES[1],
     materials: ["Sterling Silver"],
     year: 2024,
     isSold: false,
@@ -197,7 +175,6 @@ const MOCK_GALLERY_PIECES: GalleryPiece[] = [
     slug: { current: "gossamer-wing-earrings" },
     images: [],
     description: "Delicate dragonfly wing earrings in hammered copper with translucent glass details.",
-    category: MOCK_CATEGORIES[2],
     materials: ["Copper", "Glass"],
     year: 2023,
     isSold: true,
@@ -210,7 +187,6 @@ const MOCK_GALLERY_PIECES: GalleryPiece[] = [
     slug: { current: "bramble-thorn-cuff" },
     images: [],
     description: "A bold brass cuff with thorny vine details and tiny rose-shaped copper accents.",
-    category: MOCK_CATEGORIES[3],
     materials: ["Brass", "Copper"],
     year: 2024,
     isSold: false,
@@ -223,7 +199,6 @@ const MOCK_GALLERY_PIECES: GalleryPiece[] = [
     slug: { current: "moth-moonstone-brooch" },
     images: [],
     description: "A luna moth brooch in oxidized silver with a luminous moonstone body.",
-    category: MOCK_CATEGORIES[4],
     materials: ["Sterling Silver", "Gemstone"],
     year: 2023,
     isSold: true,
@@ -236,7 +211,6 @@ const MOCK_GALLERY_PIECES: GalleryPiece[] = [
     slug: { current: "wildflower-wreath-ring" },
     images: [],
     description: "A dainty ring of tiny wildflowers wreathed around the finger in gold-filled wire.",
-    category: MOCK_CATEGORIES[0],
     materials: ["Gold-filled"],
     year: 2024,
     isSold: false,
@@ -269,7 +243,6 @@ export async function getProducts(): Promise<Product[]> {
   if (!isDatabaseConfigured()) return MOCK_PRODUCTS;
   const products = await prisma.product.findMany({
     orderBy: { createdAt: "desc" },
-    include: { category: true },
   });
   return products.map(mapProduct);
 }
@@ -279,7 +252,6 @@ export async function getFeaturedProducts(): Promise<Product[]> {
   const products = await prisma.product.findMany({
     where: { featured: true },
     orderBy: { createdAt: "desc" },
-    include: { category: true },
   });
   return products.map(mapProduct);
 }
@@ -289,7 +261,6 @@ export async function getProductBySlug(slug: string): Promise<Product | null> {
     return MOCK_PRODUCTS.find((p) => p.slug.current === slug) || null;
   const product = await prisma.product.findUnique({
     where: { slug },
-    include: { category: true },
   });
   return product ? mapProduct(product) : null;
 }
@@ -301,31 +272,27 @@ export async function getProductSlugs(): Promise<string[]> {
 }
 
 export async function getGalleryPieces(): Promise<GalleryPiece[]> {
-  if (!isDatabaseConfigured()) return MOCK_GALLERY_PIECES;
+  if (!isDatabaseConfigured()) {
+    const localPieces = await getLocalPublicGalleryPieces();
+    return (await hasLocalGalleryData()) ? localPieces : MOCK_GALLERY_PIECES;
+  }
   const pieces = await prisma.galleryPiece.findMany({
     orderBy: { createdAt: "desc" },
-    include: { category: true },
   });
   return pieces.map(mapGalleryPiece);
 }
 
 export async function getFeaturedGalleryPieces(): Promise<GalleryPiece[]> {
-  if (!isDatabaseConfigured())
-    return MOCK_GALLERY_PIECES.filter((p) => p.featured);
+  if (!isDatabaseConfigured()) {
+    const localPieces = await getLocalPublicGalleryPieces();
+    const pieces = (await hasLocalGalleryData()) ? localPieces : MOCK_GALLERY_PIECES;
+    return pieces.filter((p) => p.featured);
+  }
   const pieces = await prisma.galleryPiece.findMany({
     where: { featured: true },
     orderBy: { createdAt: "desc" },
-    include: { category: true },
   });
   return pieces.map(mapGalleryPiece);
-}
-
-export async function getCategories(): Promise<Category[]> {
-  if (!isDatabaseConfigured()) return MOCK_CATEGORIES;
-  const categories = await prisma.category.findMany({
-    orderBy: { title: "asc" },
-  });
-  return categories.map(mapCategory);
 }
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -355,7 +322,7 @@ export async function getSiteSettings(): Promise<SiteSettings> {
 export async function getProductById(id: string) {
   return prisma.product.findUnique({
     where: { id },
-    include: { category: true, productMaterials: { include: { material: true } } },
+    include: { productMaterials: { include: { material: true } } },
   });
 }
 

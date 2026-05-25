@@ -27,6 +27,14 @@ function PlaceholderImage({ name }: { name: string }) {
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const bulkUnitPrice = product.bulkPricingEnabled
+    ? product.bulkPricingMode === "fixed"
+      ? product.bulkUnitPrice
+      : product.bulkDiscountPercent != null
+        ? Math.round(product.price * (1 - product.bulkDiscountPercent / 100))
+        : null
+    : null;
+
   return (
     <Link href={`/shop/${product.slug.current}`} className="block">
       <ShimmerEffect className="bg-velvet rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-copper/10 transition-all duration-300 hover:-translate-y-1">
@@ -54,6 +62,11 @@ export function ProductCard({ product }: ProductCardProps) {
           <p className="text-rose-gold mt-2 text-lg font-medium">
             {formatPrice(product.price)}
           </p>
+          {product.bulkPricingEnabled && product.bulkMinQuantity && bulkUnitPrice && (
+            <p className="text-copper text-sm mt-1">
+              {product.bulkMinQuantity}+ for {formatPrice(bulkUnitPrice)} each
+            </p>
+          )}
           {product.materials && product.materials.length > 0 && (
             <p className="text-warm-white/40 text-sm mt-2">
               {product.materials.join(" · ")}

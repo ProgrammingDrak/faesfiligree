@@ -18,37 +18,57 @@ model Category {
 }
 
 model Material {
-  id          String            @id @default(cuid())
-  name        String            @unique
-  unit        String            @default("unit")
-  costPerUnit Int               @default(0)
-  products    ProductMaterial[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  id               String            @id @default(cuid())
+  name             String            @unique
+  unit             String            @default("unit")
+  purchaseQuantity Float?
+  purchaseCost     Int?
+  costPerUnit      Float             @default(0)
+  stockOnHand      Float             @default(0)
+  reorderLevel     Float             @default(0)
+  notes            String?
+  products         ProductMaterial[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 }
 
 model Product {
-  id               String            @id @default(cuid())
-  name             String
-  slug             String            @unique
-  description      String?
-  price            Int
-  images           String[]
-  categoryId       String?
-  category         Category?         @relation(fields: [categoryId], references: [id])
-  materials        String[]
-  dimensions       String?
-  inStock          Boolean           @default(true)
-  featured         Boolean           @default(false)
-  materialCostLump Int?
-  laborHours       Float             @default(0)
-  soldCount        Int               @default(0)
-  soldRevenue      Int               @default(0)
-  productMaterials ProductMaterial[]
-  sales            Sale[]
-  eventInventory   EventInventory[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id                       String            @id @default(cuid())
+  name                     String
+  slug                     String            @unique
+  inventoryLabel           String?
+  labels                   String[]          @default([])
+  description              String?
+  price                    Int
+  images                   String[]
+  categoryId               String?
+  category                 Category?         @relation(fields: [categoryId], references: [id])
+  materials                String[]
+  dimensions               String?
+  quantityMade             Int               @default(1)
+  quantityAvailable        Int               @default(1)
+  inStock                  Boolean           @default(true)
+  featured                 Boolean           @default(false)
+  isPartnerProduct         Boolean           @default(false)
+  partnerCompanyName       String?
+  partnerCommissionPercent Float?
+  partnerPricingNotes      String?
+  bulkPricingEnabled       Boolean           @default(false)
+  bulkMinQuantity          Int?
+  bulkPricingMode          String?
+  bulkDiscountPercent      Float?
+  bulkUnitPrice            Int?
+  bulkPricingNotes         String?
+  materialCostLump         Int?
+  laborHours               Float             @default(0)
+  soldCount                Int               @default(0)
+  soldRevenue              Int               @default(0)
+  productMaterials         ProductMaterial[]
+  buildQueue               ProductBuild[]
+  sales                    Sale[]
+  eventInventory           EventInventory[]
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
 }
 
 model ProductMaterial {
@@ -60,6 +80,18 @@ model ProductMaterial {
   quantity   Float    @default(1)
 
   @@unique([productId, materialId])
+}
+
+model ProductBuild {
+  id          String    @id @default(cuid())
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity    Int       @default(1)
+  status      String    @default("planned")
+  notes       String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model GalleryPiece {
@@ -98,18 +130,18 @@ model Commission {
 }
 
 model SiteSettings {
-  id             String   @id @default("singleton")
-  heroHeading    String   @default("Handcrafted with Enchantment")
-  heroSubheading String   @default("")
-  aboutContent   String?
-  processSteps   Json?
-  contactEmail   String?
-  socialLinks    Json?
+  id              String   @id @default("singleton")
+  heroHeading     String   @default("Handcrafted with Enchantment")
+  heroSubheading  String   @default("")
+  aboutContent    String?
+  processSteps    Json?
+  contactEmail    String?
+  socialLinks     Json?
   announcementBar String?
-  shippingInfo   String?
-  returnPolicy   String?
-  laborRate      Int      @default(2500)
-  updatedAt      DateTime @updatedAt
+  shippingInfo    String?
+  returnPolicy    String?
+  laborRate       Int      @default(2500)
+  updatedAt       DateTime @updatedAt
 }
 
 model Event {
@@ -127,23 +159,26 @@ model Event {
 }
 
 model EventExpense {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   eventId     String
-  event       Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  event       Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
   category    String
   description String?
   amount      Int
 }
 
 model EventInventory {
-  id              String  @id @default(cuid())
-  eventId         String
-  event           Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  productId       String
-  product         Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  quantityBrought Int     @default(0)
-  quantitySold    Int     @default(0)
-  priceAtEvent    Int
+  id                       String  @id @default(cuid())
+  eventId                  String
+  event                    Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  productId                String
+  product                  Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantityBrought          Int     @default(0)
+  quantitySold             Int     @default(0)
+  priceAtEvent             Int
+  partnerCompanyName       String?
+  partnerCommissionPercent Float?
+  partnerPricingNotes      String?
 
   @@unique([eventId, productId])
 }

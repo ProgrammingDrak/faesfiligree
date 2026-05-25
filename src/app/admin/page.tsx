@@ -5,17 +5,22 @@ import { StatCard } from "@/components/admin/StatCard";
 export default async function AdminDashboard() {
   const dbConfigured = isDatabaseConfigured();
 
-  let stats = { products: 0, gallery: 0, commissions: 0, events: 0 };
+  let stats = { products: 0, supplies: 0, lowStock: 0, commissions: 0 };
 
   if (dbConfigured) {
     const { prisma } = await import("@/lib/db");
-    const [products, gallery, commissions, events] = await Promise.all([
+    const [products, supplies, lowStockSupplies, commissions] = await Promise.all([
       prisma.product.count(),
-      prisma.galleryPiece.count(),
+      prisma.material.count(),
+      prisma.material.findMany(),
       prisma.commission.count({ where: { status: "pending" } }),
-      prisma.event.count(),
     ]);
-    stats = { products, gallery, commissions, events };
+    stats = {
+      products,
+      supplies,
+      lowStock: lowStockSupplies.filter((material) => material.reorderLevel > 0 && material.stockOnHand <= material.reorderLevel).length,
+      commissions,
+    };
   }
 
   return (
@@ -32,16 +37,16 @@ export default async function AdminDashboard() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="Products" value={stats.products} />
-        <StatCard label="Gallery Pieces" value={stats.gallery} />
+        <StatCard label="Supplies" value={stats.supplies} />
+        <StatCard label="Low Stock" value={stats.lowStock} />
         <StatCard label="Pending Commissions" value={stats.commissions} />
-        <StatCard label="Events" value={stats.events} />
       </div>
 
       <h2 className="font-heading text-xl text-warm-white mb-4">Quick Actions</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {[
-          { href: "/admin/products/new", label: "Add Product" },
-          { href: "/admin/gallery/new", label: "Add Gallery Piece" },
+          { href: "/admin/products/new", label: "Create Inventory Item" },
+          { href: "/admin/products", label: "Review Product Costs" },
           { href: "/admin/materials", label: "Manage Materials" },
           { href: "/admin/events/new", label: "Create Event" },
           { href: "/admin/analytics", label: "View Analytics" },

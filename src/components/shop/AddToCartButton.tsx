@@ -21,6 +21,11 @@ export function AddToCartButton({ product }: AddToCartButtonProps) {
       id: product._id,
       name: product.name,
       price: product.price,
+      bulkPricingEnabled: product.bulkPricingEnabled,
+      bulkMinQuantity: product.bulkMinQuantity,
+      bulkPricingMode: product.bulkPricingMode,
+      bulkDiscountPercent: product.bulkDiscountPercent,
+      bulkUnitPrice: product.bulkUnitPrice,
       slug: product.slug.current,
       image: product.images[0],
     });

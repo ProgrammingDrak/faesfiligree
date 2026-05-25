@@ -5,6 +5,11 @@ export interface CartItem {
   id: string;
   name: string;
   price: number;
+  bulkPricingEnabled?: boolean;
+  bulkMinQuantity?: number;
+  bulkPricingMode?: string;
+  bulkDiscountPercent?: number;
+  bulkUnitPrice?: number;
   slug: string;
   image?: string;
   quantity: number;
@@ -18,6 +23,19 @@ interface CartStore {
   clearCart: () => void;
   getItemCount: () => number;
   getTotal: () => number;
+}
+
+export function getEffectiveCartUnitPrice(item: Pick<CartItem, "price" | "quantity" | "bulkPricingEnabled" | "bulkMinQuantity" | "bulkPricingMode" | "bulkDiscountPercent" | "bulkUnitPrice">) {
+  if (!item.bulkPricingEnabled || !item.bulkMinQuantity || item.quantity < item.bulkMinQuantity) {
+    return item.price;
+  }
+  if (item.bulkPricingMode === "fixed" && item.bulkUnitPrice && item.bulkUnitPrice > 0) {
+    return item.bulkUnitPrice;
+  }
+  if (item.bulkDiscountPercent && item.bulkDiscountPercent > 0) {
+    return Math.round(item.price * (1 - item.bulkDiscountPercent / 100));
+  }
+  return item.price;
 }
 
 export const useCartStore = create<CartStore>()(
@@ -64,7 +82,7 @@ export const useCartStore = create<CartStore>()(
 
       getTotal: () =>
         get().items.reduce(
-          (sum, item) => sum + item.price * item.quantity,
+          (sum, item) => sum + getEffectiveCartUnitPrice(item) * item.quantity,
           0
         ),
     }),

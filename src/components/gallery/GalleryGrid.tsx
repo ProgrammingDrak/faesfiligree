@@ -17,7 +17,7 @@ export function GalleryGrid({ pieces }: GalleryGridProps) {
         className="text-center py-20"
       >
         <p className="text-charcoal/50 text-lg font-heading">
-          No pieces found in this category
+          No gallery pieces yet
         </p>
       </motion.div>
     );

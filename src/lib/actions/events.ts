@@ -4,6 +4,25 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 
+function parsePartnerTerms(formData: FormData) {
+  const partnerCompanyName = String(formData.get("partnerCompanyName") ?? "").trim();
+  const commissionRaw = String(formData.get("partnerCommissionPercent") ?? "").trim();
+  const partnerPricingNotes = String(formData.get("partnerPricingNotes") ?? "").trim();
+  const partnerCommissionPercent = commissionRaw === "" ? null : parseFloat(commissionRaw);
+
+  if (partnerCommissionPercent != null) {
+    if (!Number.isFinite(partnerCommissionPercent) || partnerCommissionPercent < 0 || partnerCommissionPercent > 100) {
+      return { error: "Partner commission must be between 0 and 100%" };
+    }
+  }
+
+  return {
+    partnerCompanyName: partnerCompanyName || null,
+    partnerCommissionPercent,
+    partnerPricingNotes: partnerPricingNotes || null,
+  };
+}
+
 export async function createEvent(formData: FormData) {
   const name = formData.get("name") as string;
   const startDate = formData.get("startDate") as string;
@@ -94,10 +113,43 @@ export async function addEventInventory(eventId: string, formData: FormData) {
     return { error: "Product, quantity, and price are required" };
   }
 
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: {
+      isPartnerProduct: true,
+      partnerCompanyName: true,
+      partnerCommissionPercent: true,
+      partnerPricingNotes: true,
+    },
+  });
+
+  if (!product) return { error: "Product not found" };
+
   await prisma.eventInventory.upsert({
     where: { eventId_productId: { eventId, productId } },
-    create: { eventId, productId, quantityBrought, priceAtEvent },
+    create: {
+      eventId,
+      productId,
+      quantityBrought,
+      priceAtEvent,
+      partnerCompanyName: product.isPartnerProduct ? product.partnerCompanyName : null,
+      partnerCommissionPercent: product.isPartnerProduct ? product.partnerCommissionPercent : null,
+      partnerPricingNotes: product.isPartnerProduct ? product.partnerPricingNotes : null,
+    },
     update: { quantityBrought, priceAtEvent },
+  });
+
+  revalidatePath(`/admin/events/${eventId}`);
+  return { success: true };
+}
+
+export async function updateEventInventoryPartnerTerms(id: string, eventId: string, formData: FormData) {
+  const partnerTerms = parsePartnerTerms(formData);
+  if ("error" in partnerTerms) return { error: partnerTerms.error };
+
+  await prisma.eventInventory.update({
+    where: { id },
+    data: partnerTerms,
   });
 
   revalidatePath(`/admin/events/${eventId}`);
@@ -114,7 +166,7 @@ export async function recordEventSale(eventId: string, formData: FormData) {
   const inventoryId = formData.get("inventoryId") as string;
   const quantitySold = parseInt(formData.get("quantitySold") as string || "0");
 
-  if (!inventoryId || quantitySold <= 0) {
+  if (!inventoryId || quantitySold < 0) {
     return { error: "Inventory item and quantity are required" };
   }
 
@@ -122,6 +174,7 @@ export async function recordEventSale(eventId: string, formData: FormData) {
     where: { id: inventoryId },
   });
   if (!inventory) return { error: "Inventory item not found" };
+  if (quantitySold > inventory.quantityBrought) return { error: "Quantity sold cannot exceed quantity brought" };
 
   // Update the inventory sold count
   await prisma.eventInventory.update({
@@ -133,6 +186,11 @@ export async function recordEventSale(eventId: string, formData: FormData) {
   const existingSale = await prisma.sale.findFirst({
     where: { eventId, productId: inventory.productId },
   });
+  const previousQuantitySold = existingSale?.quantity ?? 0;
+  const quantityDelta = quantitySold - previousQuantitySold;
+  const previousRevenue = existingSale ? existingSale.quantity * existingSale.price : 0;
+  const nextRevenue = quantitySold * inventory.priceAtEvent;
+  const revenueDelta = nextRevenue - previousRevenue;
 
   if (existingSale) {
     await prisma.sale.update({
@@ -151,15 +209,25 @@ export async function recordEventSale(eventId: string, formData: FormData) {
   }
 
   // Update product sold stats
-  await prisma.product.update({
-    where: { id: inventory.productId },
-    data: {
-      soldCount: { increment: quantitySold },
-      soldRevenue: { increment: inventory.priceAtEvent * quantitySold },
-    },
-  });
+  if (quantityDelta !== 0 || revenueDelta !== 0) {
+    const product = await prisma.product.update({
+      where: { id: inventory.productId },
+      data: {
+        quantityAvailable: { decrement: quantityDelta },
+        soldCount: { increment: quantityDelta },
+        soldRevenue: { increment: revenueDelta },
+      },
+    });
+
+    await prisma.product.update({
+      where: { id: inventory.productId },
+      data: { inStock: product.quantityAvailable > 0 },
+    });
+  }
 
   revalidatePath(`/admin/events/${eventId}`);
+  revalidatePath("/admin/products");
+  revalidatePath("/shop");
   revalidatePath("/admin/analytics");
   return { success: true };
 }
