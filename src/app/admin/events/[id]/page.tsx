@@ -31,7 +31,12 @@ export default async function EventDetailPage({ params }: Props) {
 
   const totalExpenses = event.expenses.reduce((sum, e) => sum + e.amount, 0);
   const totalRevenue = event.sales.reduce((sum, s) => sum + s.price * s.quantity, 0);
-  const profitLoss = totalRevenue - totalExpenses;
+  const totalPartnerPayout = event.inventory.reduce((sum, i) => {
+    const commissionPercent = i.partnerCommissionPercent ?? 0;
+    return sum + Math.round(i.quantitySold * i.priceAtEvent * (commissionPercent / 100));
+  }, 0);
+  const faesRevenue = totalRevenue - totalPartnerPayout;
+  const profitLoss = faesRevenue - totalExpenses;
 
   return (
     <div>
@@ -53,7 +58,7 @@ export default async function EventDetailPage({ params }: Props) {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
           <p className="text-warm-white/50 text-sm">Total Expenses</p>
           <p className="text-xl text-warm-white font-heading">{formatPrice(totalExpenses)}</p>
@@ -61,6 +66,10 @@ export default async function EventDetailPage({ params }: Props) {
         <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
           <p className="text-warm-white/50 text-sm">Total Revenue</p>
           <p className="text-xl text-warm-white font-heading">{formatPrice(totalRevenue)}</p>
+        </div>
+        <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
+          <p className="text-warm-white/50 text-sm">Partner Payout</p>
+          <p className="text-xl text-warm-white font-heading">{formatPrice(totalPartnerPayout)}</p>
         </div>
         <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
           <p className="text-warm-white/50 text-sm">Items Brought</p>
@@ -96,8 +105,18 @@ export default async function EventDetailPage({ params }: Props) {
             quantityBrought: i.quantityBrought,
             quantitySold: i.quantitySold,
             priceAtEvent: i.priceAtEvent,
+            partnerCompanyName: i.partnerCompanyName,
+            partnerCommissionPercent: i.partnerCommissionPercent,
+            partnerPricingNotes: i.partnerPricingNotes,
           }))}
-          products={products.map((p) => ({ id: p.id, name: p.name, price: p.price }))}
+          products={products.map((p) => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            isPartnerProduct: p.isPartnerProduct,
+            partnerCompanyName: p.partnerCompanyName,
+            partnerCommissionPercent: p.partnerCommissionPercent,
+          }))}
         />
       </section>
 
@@ -125,6 +144,9 @@ export default async function EventDetailPage({ params }: Props) {
             quantityBrought: i.quantityBrought,
             quantitySold: i.quantitySold,
             priceAtEvent: i.priceAtEvent,
+            partnerCompanyName: i.partnerCompanyName,
+            partnerCommissionPercent: i.partnerCommissionPercent,
+            partnerPricingNotes: i.partnerPricingNotes,
           }))}
         />
       </section>

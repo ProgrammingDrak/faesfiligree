@@ -59,12 +59,23 @@ export function FeaturedPieces({ products, galleryPieces }: FeaturedPiecesProps)
                       )}
                     </div>
                     <div className="p-5">
-                      <h3 className="font-heading text-xl text-warm-white">
+            <h3 className="font-heading text-xl text-warm-white">
                         {product.name}
                       </h3>
                       <p className="text-rose-gold mt-1 font-medium">
                         {formatPrice(product.price)}
                       </p>
+                      {product.bulkPricingEnabled && product.bulkMinQuantity && (
+                        <p className="text-copper text-sm mt-1">
+                          {product.bulkMinQuantity}+ for {formatPrice(
+                            product.bulkPricingMode === "fixed" && product.bulkUnitPrice
+                              ? product.bulkUnitPrice
+                              : product.bulkDiscountPercent != null
+                                ? Math.round(product.price * (1 - product.bulkDiscountPercent / 100))
+                                : product.price
+                          )} each
+                        </p>
+                      )}
                       {product.materials && (
                         <p className="text-warm-white/50 text-sm mt-2">
                           {product.materials.join(" · ")}

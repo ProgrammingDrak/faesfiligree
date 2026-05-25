@@ -8,6 +8,20 @@ interface CheckoutItem {
   quantity: number;
 }
 
+function getCheckoutUnitPrice(product: Awaited<ReturnType<typeof getProductBySlug>>, quantity: number) {
+  if (!product) return 0;
+  if (!product.bulkPricingEnabled || !product.bulkMinQuantity || quantity < product.bulkMinQuantity) {
+    return product.price;
+  }
+  if (product.bulkPricingMode === "fixed" && product.bulkUnitPrice && product.bulkUnitPrice > 0) {
+    return product.bulkUnitPrice;
+  }
+  if (product.bulkDiscountPercent && product.bulkDiscountPercent > 0) {
+    return Math.round(product.price * (1 - product.bulkDiscountPercent / 100));
+  }
+  return product.price;
+}
+
 export async function createPayment(
   sourceId: string,
   items: CheckoutItem[]
@@ -35,11 +49,12 @@ export async function createPayment(
       if (!product.inStock)
         throw new Error(`Product out of stock: ${product.name}`);
 
-      totalAmount += product.price * item.quantity;
+      const unitPrice = getCheckoutUnitPrice(product, item.quantity);
+      totalAmount += unitPrice * item.quantity;
       orderItems.push({
         name: product.name,
         quantity: item.quantity,
-        price: product.price,
+        price: unitPrice,
       });
     }
 

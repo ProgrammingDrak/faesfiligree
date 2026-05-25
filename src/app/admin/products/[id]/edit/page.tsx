@@ -17,8 +17,8 @@ export default async function EditProductPage({ params }: Props) {
   });
   if (!product) return notFound();
 
-  const categories = await prisma.category.findMany({ orderBy: { title: "asc" } });
   const materials = await prisma.material.findMany({ orderBy: { name: "asc" } });
+  const settings = await prisma.siteSettings.findUnique({ where: { id: "singleton" } });
 
   return (
     <div>
@@ -31,8 +31,8 @@ export default async function EditProductPage({ params }: Props) {
             quantity: pm.quantity,
           })),
         }}
-        categories={categories}
         materials={materials}
+        laborRate={settings?.laborRate ?? 2500}
       />
     </div>
   );

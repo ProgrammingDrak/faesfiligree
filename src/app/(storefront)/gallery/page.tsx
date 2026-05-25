@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { GalleryContent } from "@/components/gallery";
-import { getGalleryPieces, getCategories } from "@/lib/data/queries";
+import { getGalleryPieces } from "@/lib/data/queries";
 import { ScrollReveal } from "@/components/ui";
 
 export const metadata = {
@@ -10,10 +10,7 @@ export const metadata = {
 };
 
 export default async function GalleryPage() {
-  const [pieces, categories] = await Promise.all([
-    getGalleryPieces(),
-    getCategories(),
-  ]);
+  const pieces = await getGalleryPieces();
 
   return (
     <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
@@ -27,7 +24,7 @@ export default async function GalleryPage() {
       </ScrollReveal>
 
       <Suspense fallback={<div className="text-center py-10">Loading...</div>}>
-        <GalleryContent pieces={pieces} categories={categories} />
+        <GalleryContent pieces={pieces} />
       </Suspense>
     </section>
   );

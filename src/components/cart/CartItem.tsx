@@ -1,6 +1,6 @@
 "use client";
 
-import { useCartStore, type CartItem as CartItemType } from "@/stores/cart";
+import { getEffectiveCartUnitPrice, useCartStore, type CartItem as CartItemType } from "@/stores/cart";
 import { formatPrice } from "@/lib/utils";
 
 interface CartItemProps {
@@ -12,6 +12,8 @@ export function CartItem({ item }: CartItemProps) {
   const removeItem = useCartStore((s) => s.removeItem);
 
   const hue = item.name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) % 40 + 15;
+  const effectiveUnitPrice = getEffectiveCartUnitPrice(item);
+  const hasBulkPrice = effectiveUnitPrice < item.price;
 
   return (
     <div className="flex gap-4 py-4 border-b border-charcoal/10">
@@ -36,8 +38,13 @@ export function CartItem({ item }: CartItemProps) {
           {item.name}
         </h4>
         <p className="text-copper text-sm font-medium mt-0.5">
-          {formatPrice(item.price)}
+          {formatPrice(effectiveUnitPrice)}
         </p>
+        {hasBulkPrice && item.bulkMinQuantity && (
+          <p className="text-xs text-green-700 mt-0.5">
+            Bulk price applied at {item.bulkMinQuantity}+
+          </p>
+        )}
 
         {/* Quantity controls */}
         <div className="flex items-center gap-2 mt-2">
@@ -71,7 +78,7 @@ export function CartItem({ item }: CartItemProps) {
           &times;
         </button>
         <p className="text-sm font-medium text-charcoal">
-          {formatPrice(item.price * item.quantity)}
+          {formatPrice(effectiveUnitPrice * item.quantity)}
         </p>
       </div>
     </div>

@@ -27,6 +27,8 @@ function PlaceholderImage({ name }: { name: string }) {
 }
 
 export function GalleryItem({ piece }: GalleryItemProps) {
+  const image = piece.images[0];
+
   return (
     <motion.div
       layout
@@ -36,7 +38,15 @@ export function GalleryItem({ piece }: GalleryItemProps) {
       transition={{ duration: 0.3 }}
       className="group relative aspect-square rounded-xl overflow-hidden bg-velvet cursor-pointer"
     >
-      <PlaceholderImage name={piece.title} />
+      {image ? (
+        <img
+          src={image}
+          alt={piece.title}
+          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <PlaceholderImage name={piece.title} />
+      )}
 
       {/* Hover overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4">

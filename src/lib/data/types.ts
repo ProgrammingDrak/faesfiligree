@@ -1,18 +1,16 @@
-export interface Category {
-  _id: string;
-  title: string;
-  slug: { current: string };
-  description?: string;
-}
-
 export interface Product {
   _id: string;
   name: string;
   slug: { current: string };
   description?: string;
   price: number;
+  bulkPricingEnabled?: boolean;
+  bulkMinQuantity?: number;
+  bulkPricingMode?: string;
+  bulkDiscountPercent?: number;
+  bulkUnitPrice?: number;
+  bulkPricingNotes?: string;
   images: string[];
-  category?: Category;
   materials?: string[];
   dimensions?: string;
   inStock: boolean;
@@ -25,7 +23,6 @@ export interface GalleryPiece {
   slug: { current: string };
   images: string[];
   description?: string;
-  category?: Category;
   materials?: string[];
   year?: number;
   isSold: boolean;

@@ -7,7 +7,79 @@ interface Material {
   id: string;
   name: string;
   unit: string;
+  purchaseQuantity: number | null;
+  purchaseCost: number | null;
   costPerUnit: number;
+  notes: string | null;
+}
+
+function formatUnitCost(costPerUnit: number) {
+  const dollars = costPerUnit / 100;
+  const precision = dollars > 0 && dollars < 0.1 ? 4 : 2;
+  return `$${dollars.toFixed(precision)}`;
+}
+
+function formatMoneyInput(cents: number | null) {
+  return cents == null ? "" : (cents / 100).toFixed(2);
+}
+
+function MaterialCostFields({
+  material,
+  compact = false,
+}: {
+  material?: Partial<Material>;
+  compact?: boolean;
+}) {
+  const [purchaseQuantity, setPurchaseQuantity] = useState(
+    material?.purchaseQuantity?.toString() || ""
+  );
+  const [purchaseCost, setPurchaseCost] = useState(formatMoneyInput(material?.purchaseCost ?? null));
+  const costPerUnit =
+    (parseFloat(purchaseCost) * 100) / parseFloat(purchaseQuantity);
+  const calculatedCost = Number.isFinite(costPerUnit) && costPerUnit > 0 ? costPerUnit : 0;
+  const inputClass = compact
+    ? "px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
+    : "px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white text-sm focus:outline-none focus:ring-2 focus:ring-copper";
+
+  return (
+    <>
+      <input
+        name="purchaseQuantity"
+        aria-label="Amount purchased"
+        type="number"
+        step="0.0001"
+        min="0"
+        value={purchaseQuantity}
+        onChange={(event) => setPurchaseQuantity(event.target.value)}
+        placeholder="Amount purchased"
+        required
+        className={inputClass}
+      />
+      <input
+        name="unit"
+        aria-label="Unit"
+        placeholder="Unit"
+        defaultValue={material?.unit || "unit"}
+        className={inputClass}
+      />
+      <input
+        name="purchaseCost"
+        aria-label="Purchase price"
+        type="number"
+        step="0.01"
+        min="0"
+        value={purchaseCost}
+        onChange={(event) => setPurchaseCost(event.target.value)}
+        placeholder="Price paid ($)"
+        required
+        className={inputClass}
+      />
+      <div className={`${inputClass} text-warm-white/70`}>
+        <span className="text-warm-white/40">Cost/unit: </span>
+        {formatUnitCost(calculatedCost)}
+      </div>
+    </>
+  );
 }
 
 export default function MaterialsPage() {
@@ -46,31 +118,14 @@ export default function MaterialsPage() {
     <div>
       <h1 className="font-heading text-3xl text-warm-white mb-6">Materials</h1>
       <p className="text-warm-white/50 text-sm mb-4">
-        Define materials and their costs. These are used for itemized material cost tracking on products.
+        Enter what you bought and what you paid. Unit cost is calculated for itemized product tracking.
       </p>
 
       {/* Add new */}
-      <form action={handleCreate} className="flex gap-2 mb-6">
-        <input
-          name="name"
-          required
-          placeholder="Material name"
-          className="flex-1 px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white text-sm focus:outline-none focus:ring-2 focus:ring-copper"
-        />
-        <input
-          name="unit"
-          placeholder="Unit (feet, grams...)"
-          defaultValue="unit"
-          className="w-32 px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white text-sm focus:outline-none focus:ring-2 focus:ring-copper"
-        />
-        <input
-          name="costPerUnit"
-          type="number"
-          step="0.01"
-          min="0"
-          placeholder="Cost per unit ($)"
-          className="w-36 px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white text-sm focus:outline-none focus:ring-2 focus:ring-copper"
-        />
+      <form action={handleCreate} className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr_0.7fr_0.8fr_0.9fr_1fr_auto] gap-2 mb-6">
+        <input name="name" required placeholder="Supply name" className="px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white text-sm focus:outline-none focus:ring-2 focus:ring-copper" />
+        <MaterialCostFields />
+        <input name="notes" placeholder="Vendor / notes" className="px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white text-sm focus:outline-none focus:ring-2 focus:ring-copper" />
         <button
           type="submit"
           className="px-4 py-2 bg-copper hover:bg-copper-dark text-white rounded-lg text-sm transition-colors"
@@ -93,33 +148,31 @@ export default function MaterialsPage() {
               {editingId === mat.id ? (
                 <form
                   action={(formData) => handleUpdate(mat.id, formData)}
-                  className="flex gap-2 flex-1"
+                  className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr_0.7fr_0.8fr_0.9fr_1fr_auto_auto] gap-2 flex-1"
                 >
                   <input
                     name="name"
                     defaultValue={mat.name}
-                    className="flex-1 px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
+                    className="px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
                   />
-                  <input
-                    name="unit"
-                    defaultValue={mat.unit}
-                    className="w-24 px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
-                  />
-                  <input
-                    name="costPerUnit"
-                    type="number"
-                    step="0.01"
-                    defaultValue={(mat.costPerUnit / 100).toFixed(2)}
-                    className="w-24 px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
-                  />
+                  <MaterialCostFields material={mat} compact />
+                  <input name="notes" defaultValue={mat.notes || ""} className="px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm" />
                   <button type="submit" className="text-copper text-sm">Save</button>
                   <button type="button" onClick={() => setEditingId(null)} className="text-warm-white/50 text-sm">Cancel</button>
                 </form>
               ) : (
                 <>
-                  <div className="flex items-center gap-4">
-                    <span className="text-warm-white font-medium">{mat.name}</span>
-                    <span className="text-warm-white/50 text-sm">${(mat.costPerUnit / 100).toFixed(2)} / {mat.unit}</span>
+                  <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-2 flex-1">
+                    <div>
+                      <span className="text-warm-white font-medium">{mat.name}</span>
+                      {mat.notes && <p className="text-warm-white/40 text-xs">{mat.notes}</p>}
+                    </div>
+                    <span className="text-warm-white/60 text-sm">
+                      {mat.purchaseQuantity && mat.purchaseCost
+                        ? `${mat.purchaseQuantity} ${mat.unit} for $${(mat.purchaseCost / 100).toFixed(2)} · `
+                        : ""}
+                      {formatUnitCost(mat.costPerUnit)} / {mat.unit}
+                    </span>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => setEditingId(mat.id)} className="text-copper text-sm">Edit</button>

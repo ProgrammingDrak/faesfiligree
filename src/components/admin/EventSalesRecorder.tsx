@@ -9,6 +9,9 @@ interface InventoryItem {
   quantityBrought: number;
   quantitySold: number;
   priceAtEvent: number;
+  partnerCompanyName: string | null;
+  partnerCommissionPercent: number | null;
+  partnerPricingNotes: string | null;
 }
 
 interface EventSalesSectionProps {
@@ -27,43 +30,60 @@ export function EventSalesSection({ eventId, inventory }: EventSalesSectionProps
 
   const totalSold = inventory.reduce((sum, i) => sum + i.quantitySold, 0);
   const totalRevenue = inventory.reduce((sum, i) => sum + i.quantitySold * i.priceAtEvent, 0);
+  const totalPartnerPayout = inventory.reduce((sum, i) => {
+    const commissionPercent = i.partnerCommissionPercent ?? 0;
+    return sum + Math.round(i.quantitySold * i.priceAtEvent * (commissionPercent / 100));
+  }, 0);
+  const faesShare = totalRevenue - totalPartnerPayout;
 
   return (
     <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
       <div className="space-y-3">
-        {inventory.map((item) => (
-          <div key={item.id} className="flex items-center justify-between">
-            <div>
-              <span className="text-warm-white text-sm">{item.productName}</span>
-              <span className="text-warm-white/40 text-xs ml-2">
-                (brought {item.quantityBrought} @ {formatPrice(item.priceAtEvent)})
-              </span>
-            </div>
-            <form
-              action={async (formData) => {
-                formData.set("inventoryId", item.id);
-                await recordEventSale(eventId, formData);
-              }}
-              className="flex items-center gap-2"
-            >
-              <label className="text-warm-white/50 text-xs">Sold:</label>
-              <input
-                name="quantitySold"
-                type="number"
-                min="0"
-                max={item.quantityBrought}
-                defaultValue={item.quantitySold}
-                className="w-16 px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
-              />
-              <button
-                type="submit"
-                className="px-2 py-1 bg-copper/80 hover:bg-copper text-white rounded text-xs transition-colors"
+        {inventory.map((item) => {
+          const commissionPercent = item.partnerCommissionPercent ?? 0;
+          const itemRevenue = item.quantitySold * item.priceAtEvent;
+          const partnerPayout = Math.round(itemRevenue * (commissionPercent / 100));
+          const faeShare = itemRevenue - partnerPayout;
+
+          return (
+            <div key={item.id} className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span className="text-warm-white text-sm">{item.productName}</span>
+                <span className="text-warm-white/40 text-xs ml-2">
+                  (brought {item.quantityBrought} @ {formatPrice(item.priceAtEvent)})
+                </span>
+                {item.partnerCompanyName && (
+                  <p className="text-copper text-xs mt-1">
+                    {item.partnerCompanyName}: {formatPrice(partnerPayout)} · Fae&apos;s Filigree: {formatPrice(faeShare)}
+                  </p>
+                )}
+              </div>
+              <form
+                action={async (formData) => {
+                  formData.set("inventoryId", item.id);
+                  await recordEventSale(eventId, formData);
+                }}
+                className="flex items-center gap-2"
               >
-                Save
-              </button>
-            </form>
-          </div>
-        ))}
+                <label className="text-warm-white/50 text-xs">Sold:</label>
+                <input
+                  name="quantitySold"
+                  type="number"
+                  min="0"
+                  max={item.quantityBrought}
+                  defaultValue={item.quantitySold}
+                  className="w-16 px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
+                />
+                <button
+                  type="submit"
+                  className="px-2 py-1 bg-copper/80 hover:bg-copper text-white rounded text-xs transition-colors"
+                >
+                  Save
+                </button>
+              </form>
+            </div>
+          );
+        })}
       </div>
 
       {totalSold > 0 && (
@@ -71,6 +91,11 @@ export function EventSalesSection({ eventId, inventory }: EventSalesSectionProps
           <p className="text-warm-white/60 text-sm">
             Total sold: {totalSold} items · Revenue: {formatPrice(totalRevenue)}
           </p>
+          {totalPartnerPayout > 0 && (
+            <p className="text-warm-white/60 text-sm mt-1">
+              Partner payout: {formatPrice(totalPartnerPayout)} · Fae&apos;s Filigree: {formatPrice(faesShare)}
+            </p>
+          )}
         </div>
       )}
     </div>
