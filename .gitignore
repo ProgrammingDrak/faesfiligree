@@ -29,6 +29,7 @@ next-dev*.log
 # local workshop uploads/data
 /data/gallery.json
 /public/uploads/gallery/
+/supabase/.temp/
 
 # env files
 .env*.local

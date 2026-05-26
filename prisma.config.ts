@@ -18,6 +18,9 @@ for (const envFile of [".env.local", ".env"]) {
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: process.env.DATABASE_URL || "postgresql://postgres@localhost:5432/faesfiligree?schema=public",
+    url:
+      process.env.DIRECT_URL ||
+      process.env.DATABASE_URL ||
+      "postgresql://postgres@localhost:5432/faesfiligree?schema=public",
   },
 });
