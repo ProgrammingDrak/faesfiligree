@@ -5,15 +5,23 @@ import { prisma } from "@/lib/db";
 
 function parsePurchase(formData: FormData) {
   const purchaseQuantity = parseFloat(String(formData.get("purchaseQuantity") ?? ""));
-  const purchaseCost = Math.round(parseFloat(String(formData.get("purchaseCost") ?? "0")) * 100);
+  const purchaseCostInput = parseFloat(String(formData.get("purchaseCost") ?? ""));
+  const costPerUnitInput = parseFloat(String(formData.get("costPerUnit") ?? ""));
 
   if (!Number.isFinite(purchaseQuantity) || purchaseQuantity <= 0) {
     return { error: "Amount purchased must be greater than 0" };
   }
 
-  if (!Number.isFinite(purchaseCost) || purchaseCost <= 0) {
-    return { error: "Purchase price must be greater than 0" };
+  if (
+    (!Number.isFinite(purchaseCostInput) || purchaseCostInput <= 0) &&
+    (!Number.isFinite(costPerUnitInput) || costPerUnitInput <= 0)
+  ) {
+    return { error: "Purchase price or cost per unit must be greater than 0" };
   }
+
+  const purchaseCost = Number.isFinite(purchaseCostInput) && purchaseCostInput > 0
+    ? Math.round(purchaseCostInput * 100)
+    : Math.round(costPerUnitInput * purchaseQuantity * 100);
 
   return {
     purchaseQuantity,

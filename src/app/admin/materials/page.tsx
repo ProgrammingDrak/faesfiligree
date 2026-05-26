@@ -23,6 +23,33 @@ function formatMoneyInput(cents: number | null) {
   return cents == null ? "" : (cents / 100).toFixed(2);
 }
 
+function formatUnitCostInput(cents: number | null | undefined) {
+  if (cents == null) return "";
+  const dollars = cents / 100;
+  const precision = dollars > 0 && dollars < 0.1 ? 4 : 2;
+  return dollars.toFixed(precision);
+}
+
+function getPositiveNumber(value: string) {
+  const number = parseFloat(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
+}
+
+function calculateUnitCost(purchaseCost: string, purchaseQuantity: string) {
+  const cost = getPositiveNumber(purchaseCost);
+  const quantity = getPositiveNumber(purchaseQuantity);
+  if (cost == null || quantity == null) return "";
+  const unitCost = cost / quantity;
+  return unitCost.toFixed(unitCost > 0 && unitCost < 0.1 ? 4 : 2);
+}
+
+function calculatePurchaseCost(costPerUnit: string, purchaseQuantity: string) {
+  const unitCost = getPositiveNumber(costPerUnit);
+  const quantity = getPositiveNumber(purchaseQuantity);
+  if (unitCost == null || quantity == null) return "";
+  return (unitCost * quantity).toFixed(2);
+}
+
 function MaterialCostFields({
   material,
   compact = false,
@@ -34,12 +61,32 @@ function MaterialCostFields({
     material?.purchaseQuantity?.toString() || ""
   );
   const [purchaseCost, setPurchaseCost] = useState(formatMoneyInput(material?.purchaseCost ?? null));
-  const costPerUnit =
-    (parseFloat(purchaseCost) * 100) / parseFloat(purchaseQuantity);
-  const calculatedCost = Number.isFinite(costPerUnit) && costPerUnit > 0 ? costPerUnit : 0;
+  const [costPerUnit, setCostPerUnit] = useState(formatUnitCostInput(material?.costPerUnit));
+  const [priceSource, setPriceSource] = useState<"purchaseCost" | "costPerUnit">("purchaseCost");
   const inputClass = compact
     ? "px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
     : "px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white text-sm focus:outline-none focus:ring-2 focus:ring-copper";
+
+  const handleQuantityChange = (value: string) => {
+    setPurchaseQuantity(value);
+    if (priceSource === "purchaseCost") {
+      setCostPerUnit(calculateUnitCost(purchaseCost, value));
+    } else {
+      setPurchaseCost(calculatePurchaseCost(costPerUnit, value));
+    }
+  };
+
+  const handlePurchaseCostChange = (value: string) => {
+    setPriceSource("purchaseCost");
+    setPurchaseCost(value);
+    setCostPerUnit(calculateUnitCost(value, purchaseQuantity));
+  };
+
+  const handleCostPerUnitChange = (value: string) => {
+    setPriceSource("costPerUnit");
+    setCostPerUnit(value);
+    setPurchaseCost(calculatePurchaseCost(value, purchaseQuantity));
+  };
 
   return (
     <>
@@ -50,7 +97,7 @@ function MaterialCostFields({
         step="0.0001"
         min="0"
         value={purchaseQuantity}
-        onChange={(event) => setPurchaseQuantity(event.target.value)}
+        onChange={(event) => handleQuantityChange(event.target.value)}
         placeholder="Amount purchased"
         required
         className={inputClass}
@@ -69,15 +116,23 @@ function MaterialCostFields({
         step="0.01"
         min="0"
         value={purchaseCost}
-        onChange={(event) => setPurchaseCost(event.target.value)}
+        onChange={(event) => handlePurchaseCostChange(event.target.value)}
         placeholder="Price paid ($)"
         required
         className={inputClass}
       />
-      <div className={`${inputClass} text-warm-white/70`}>
-        <span className="text-warm-white/40">Cost/unit: </span>
-        {formatUnitCost(calculatedCost)}
-      </div>
+      <input
+        name="costPerUnit"
+        aria-label="Cost per unit"
+        type="number"
+        step="0.0001"
+        min="0"
+        value={costPerUnit}
+        onChange={(event) => handleCostPerUnitChange(event.target.value)}
+        placeholder="Cost/unit ($)"
+        required
+        className={inputClass}
+      />
     </>
   );
 }
