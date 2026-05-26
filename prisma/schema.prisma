@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["faesfiligree"]
 }
 
 model Category {
@@ -15,6 +16,8 @@ model Category {
   gallery     GalleryPiece[]
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model Material {
@@ -30,6 +33,8 @@ model Material {
   products         ProductMaterial[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model Product {
@@ -69,6 +74,8 @@ model Product {
   eventInventory           EventInventory[]
   createdAt                DateTime          @default(now())
   updatedAt                DateTime          @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model ProductMaterial {
@@ -80,6 +87,7 @@ model ProductMaterial {
   quantity   Float    @default(1)
 
   @@unique([productId, materialId])
+  @@schema("faesfiligree")
 }
 
 model ProductBuild {
@@ -92,6 +100,8 @@ model ProductBuild {
   completedAt DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model GalleryPiece {
@@ -109,6 +119,8 @@ model GalleryPiece {
   featured     Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model Commission {
@@ -127,6 +139,8 @@ model Commission {
   notes            String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model SiteSettings {
@@ -142,6 +156,8 @@ model SiteSettings {
   returnPolicy    String?
   laborRate       Int      @default(2500)
   updatedAt       DateTime @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model Event {
@@ -156,6 +172,8 @@ model Event {
   sales     Sale[]
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+
+  @@schema("faesfiligree")
 }
 
 model EventExpense {
@@ -165,6 +183,8 @@ model EventExpense {
   category    String
   description String?
   amount      Int
+
+  @@schema("faesfiligree")
 }
 
 model EventInventory {
@@ -181,6 +201,7 @@ model EventInventory {
   partnerPricingNotes      String?
 
   @@unique([eventId, productId])
+  @@schema("faesfiligree")
 }
 
 model Sale {
@@ -192,4 +213,6 @@ model Sale {
   quantity  Int      @default(1)
   price     Int
   date      DateTime @default(now())
+
+  @@schema("faesfiligree")
 }
