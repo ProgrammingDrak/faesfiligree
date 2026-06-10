@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: "grid" },
   { href: "/admin/products", label: "Products", icon: "package" },
+  { href: "/admin/sales", label: "Sales", icon: "tag" },
   { href: "/admin/gallery", label: "Gallery", icon: "image" },
   { href: "/admin/materials", label: "Materials", icon: "layers" },
   { href: "/admin/commissions", label: "Commissions", icon: "mail" },
@@ -25,6 +26,7 @@ function NavIcon({ name }: { name: string }) {
     mail: "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zM22 6l-10 7L2 6",
     calendar: "M3 6a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6zM16 2v4M8 2v4M3 10h18",
     chart: "M18 20V10M12 20V4M6 20v-6",
+    tag: "M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01",
     settings: "M12 15a3 3 0 100-6 3 3 0 000 6z",
   };
 

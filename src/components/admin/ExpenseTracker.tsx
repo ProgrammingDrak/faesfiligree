@@ -3,7 +3,7 @@
 import { addEventExpense, removeEventExpense } from "@/lib/actions/events";
 import { formatPrice } from "@/lib/utils";
 
-const EXPENSE_CATEGORIES = ["travel", "lodging", "booth", "food", "supplies", "other"];
+const EXPENSE_CATEGORIES = ["marketing", "travel", "lodging", "booth", "food", "supplies", "other"];
 
 interface Expense {
   id: string;

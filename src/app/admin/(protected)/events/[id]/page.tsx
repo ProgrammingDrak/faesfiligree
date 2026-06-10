@@ -5,9 +5,19 @@ import { EventExpenses } from "@/components/admin/ExpenseTracker";
 import { EventInventorySection } from "@/components/admin/InventoryAssignment";
 import { BreakEvenCalculator } from "@/components/admin/BreakEvenCalculator";
 import { EventSalesSection } from "@/components/admin/EventSalesRecorder";
+import { calculateEventMetrics } from "@/lib/data/event-metrics";
+import { updateEvent } from "@/lib/actions/events";
 
 interface Props {
   params: Promise<{ id: string }>;
+}
+
+function dateInputValue(date: Date | null) {
+  return date ? date.toISOString().slice(0, 10) : "";
+}
+
+function formatHours(hours: number) {
+  return `${Math.round(hours * 100) / 100} hrs`;
 }
 
 export default async function EventDetailPage({ params }: Props) {
@@ -24,19 +34,16 @@ export default async function EventDetailPage({ params }: Props) {
   });
   if (!event) return notFound();
 
-  const products = await prisma.product.findMany({
-    where: { inStock: true },
-    orderBy: { name: "asc" },
-  });
+  const [products, settings] = await Promise.all([
+    prisma.product.findMany({
+      where: { inStock: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.siteSettings.findUnique({ where: { id: "singleton" } }),
+  ]);
 
-  const totalExpenses = event.expenses.reduce((sum, e) => sum + e.amount, 0);
-  const totalRevenue = event.sales.reduce((sum, s) => sum + s.price * s.quantity, 0);
-  const totalPartnerPayout = event.inventory.reduce((sum, i) => {
-    const commissionPercent = i.partnerCommissionPercent ?? 0;
-    return sum + Math.round(i.quantitySold * i.priceAtEvent * (commissionPercent / 100));
-  }, 0);
-  const faesRevenue = totalRevenue - totalPartnerPayout;
-  const profitLoss = faesRevenue - totalExpenses;
+  const laborRate = settings?.laborRate ?? 2500;
+  const metrics = calculateEventMetrics(event, laborRate);
 
   return (
     <div>
@@ -50,10 +57,10 @@ export default async function EventDetailPage({ params }: Props) {
           </p>
         </div>
         <div className="text-right">
-          <p className={`text-xl font-heading ${profitLoss >= 0 ? "text-green-400" : "text-rose-gold"}`}>
-            {profitLoss >= 0 ? "+" : ""}{formatPrice(profitLoss)}
+          <p className={`text-xl font-heading ${metrics.profitAfterExpenses >= 0 ? "text-green-400" : "text-rose-gold"}`}>
+            {metrics.profitAfterExpenses >= 0 ? "+" : ""}{formatPrice(metrics.profitAfterExpenses)}
           </p>
-          <p className="text-warm-white/40 text-xs">Net P&L</p>
+          <p className="text-warm-white/40 text-xs">Net after event costs</p>
         </div>
       </div>
 
@@ -61,23 +68,159 @@ export default async function EventDetailPage({ params }: Props) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
           <p className="text-warm-white/50 text-sm">Total Expenses</p>
-          <p className="text-xl text-warm-white font-heading">{formatPrice(totalExpenses)}</p>
+          <p className="text-xl text-warm-white font-heading">{formatPrice(metrics.totalExpenses)}</p>
         </div>
         <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
-          <p className="text-warm-white/50 text-sm">Total Revenue</p>
-          <p className="text-xl text-warm-white font-heading">{formatPrice(totalRevenue)}</p>
+          <p className="text-warm-white/50 text-sm">Gross Revenue</p>
+          <p className="text-xl text-warm-white font-heading">{formatPrice(metrics.grossRevenue)}</p>
         </div>
         <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
           <p className="text-warm-white/50 text-sm">Partner Payout</p>
-          <p className="text-xl text-warm-white font-heading">{formatPrice(totalPartnerPayout)}</p>
+          <p className="text-xl text-warm-white font-heading">{formatPrice(metrics.partnerPayout)}</p>
         </div>
         <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
-          <p className="text-warm-white/50 text-sm">Items Brought</p>
-          <p className="text-xl text-warm-white font-heading">
-            {event.inventory.reduce((sum, i) => sum + i.quantityBrought, 0)}
-          </p>
+          <p className="text-warm-white/50 text-sm">Units Sold</p>
+          <p className="text-xl text-warm-white font-heading">{metrics.totalUnitsSold}</p>
         </div>
       </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
+          <p className="text-warm-white/50 text-sm">ROI</p>
+          <p className="text-xl text-warm-white font-heading">
+            {metrics.roi == null ? "N/A" : `${metrics.roi}%`}
+          </p>
+        </div>
+        <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
+          <p className="text-warm-white/50 text-sm">Return per Hour</p>
+          <p className="text-xl text-warm-white font-heading">
+            {metrics.hourlyReturn == null ? "N/A" : formatPrice(metrics.hourlyReturn)}
+          </p>
+        </div>
+        <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
+          <p className="text-warm-white/50 text-sm">Time Value</p>
+          <p className="text-xl text-warm-white font-heading">{formatPrice(metrics.timeValue)}</p>
+          <p className="text-warm-white/35 text-xs">{formatHours(metrics.totalHours)} at site labor rate</p>
+        </div>
+        <div className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4">
+          <p className="text-warm-white/50 text-sm">Attendance</p>
+          <p className="text-xl text-warm-white font-heading">
+            {event.attendeeCount ?? "N/A"}
+          </p>
+          {metrics.revenuePerAttendee != null && (
+            <p className="text-warm-white/35 text-xs">{formatPrice(metrics.revenuePerAttendee)} revenue per attendee</p>
+          )}
+        </div>
+      </div>
+
+      <section className="mb-8">
+        <h2 className="text-warm-white font-heading text-xl mb-4">Event Setup</h2>
+        <form
+          action={async (formData) => {
+            "use server";
+            await updateEvent(event.id, formData);
+          }}
+          className="bg-warm-white/5 border border-warm-white/10 rounded-lg p-4 grid grid-cols-1 md:grid-cols-2 gap-4"
+        >
+          <div className="md:col-span-2">
+            <label className="block text-sm text-warm-white/70 mb-1">Event Name</label>
+            <input
+              name="name"
+              required
+              defaultValue={event.name}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">Start Date</label>
+            <input
+              name="startDate"
+              type="date"
+              required
+              defaultValue={dateInputValue(event.startDate)}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">End Date</label>
+            <input
+              name="endDate"
+              type="date"
+              defaultValue={dateInputValue(event.endDate)}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">Location</label>
+            <input
+              name="location"
+              defaultValue={event.location ?? ""}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">Attendance</label>
+            <input
+              name="attendeeCount"
+              type="number"
+              min="0"
+              step="1"
+              defaultValue={event.attendeeCount ?? ""}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">Travel Hours</label>
+            <input
+              name="travelHours"
+              type="number"
+              min="0"
+              step="0.25"
+              defaultValue={event.travelHours}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">Setup Hours</label>
+            <input
+              name="setupHours"
+              type="number"
+              min="0"
+              step="0.25"
+              defaultValue={event.setupHours}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">Selling Hours</label>
+            <input
+              name="sellingHours"
+              type="number"
+              min="0"
+              step="0.25"
+              defaultValue={event.sellingHours}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm text-warm-white/70 mb-1">Notes</label>
+            <textarea
+              name="notes"
+              rows={3}
+              defaultValue={event.notes ?? ""}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div className="md:col-span-2">
+            <button
+              type="submit"
+              className="px-4 py-2 bg-copper hover:bg-copper-dark text-white rounded-lg text-sm transition-colors"
+            >
+              Save Event Setup
+            </button>
+          </div>
+        </form>
+      </section>
 
       {/* Expenses Section */}
       <section className="mb-8">
@@ -124,7 +267,7 @@ export default async function EventDetailPage({ params }: Props) {
       <section className="mb-8">
         <h2 className="text-warm-white font-heading text-xl mb-4">Break-Even Analysis</h2>
         <BreakEvenCalculator
-          totalExpenses={totalExpenses}
+          totalExpenses={metrics.totalExpenses}
           inventory={event.inventory.map((i) => ({
             productName: i.product.name,
             quantityBrought: i.quantityBrought,
@@ -150,6 +293,54 @@ export default async function EventDetailPage({ params }: Props) {
           }))}
         />
       </section>
+
+      {metrics.totalUnitsSold > 0 && (
+        <section className="mb-8">
+          <h2 className="text-warm-white font-heading text-xl mb-4">Per-Item Event Allocation</h2>
+          <div className="overflow-x-auto bg-warm-white/5 border border-warm-white/10 rounded-lg">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-warm-white/10 text-warm-white/50">
+                  <th className="p-3 font-normal">Product</th>
+                  <th className="p-3 font-normal text-right">Qty</th>
+                  <th className="p-3 font-normal text-right">Revenue</th>
+                  <th className="p-3 font-normal text-right">Event Cost Share</th>
+                  <th className="p-3 font-normal text-right">Event Time Share</th>
+                  <th className="p-3 font-normal text-right">Net After Share</th>
+                </tr>
+              </thead>
+              <tbody>
+                {event.sales.map((sale) => {
+                  const revenue = sale.price * sale.quantity;
+                  const costShare = metrics.costPerSoldUnit * sale.quantity;
+                  const hoursShare = metrics.hoursPerSoldUnit * sale.quantity;
+                  const timeValueShare = metrics.timeValuePerSoldUnit * sale.quantity;
+                  const partnerPercent =
+                    event.inventory.find((item) => item.productId === sale.productId)?.partnerCommissionPercent ?? 0;
+                  const partnerShare = Math.round(revenue * (partnerPercent / 100));
+                  const netAfterShare = revenue - sale.processingFee - partnerShare - costShare - timeValueShare;
+
+                  return (
+                    <tr key={sale.id} className="border-b border-warm-white/5 text-warm-white/80">
+                      <td className="p-3 text-warm-white">{sale.product.name}</td>
+                      <td className="p-3 text-right">{sale.quantity}</td>
+                      <td className="p-3 text-right">{formatPrice(revenue)}</td>
+                      <td className="p-3 text-right">{formatPrice(costShare)}</td>
+                      <td className="p-3 text-right">{formatHours(hoursShare)}</td>
+                      <td className={`p-3 text-right ${netAfterShare >= 0 ? "text-green-400" : "text-rose-gold"}`}>
+                        {formatPrice(netAfterShare)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-xs text-warm-white/40">
+            Each sold unit receives an equal share of event expenses and event time value.
+          </p>
+        </section>
+      )}
     </div>
   );
 }

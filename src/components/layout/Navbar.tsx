@@ -64,6 +64,12 @@ export function Navbar() {
                 )}
               </Link>
             ))}
+            <Link
+              href="/admin"
+              className="ml-2 px-4 py-2 rounded-full text-sm font-body text-parchment bg-copper hover:bg-copper-dark transition-colors"
+            >
+              Login
+            </Link>
           </div>
 
           {/* Mobile Hamburger */}
@@ -130,6 +136,12 @@ export function Navbar() {
                 className="block px-4 py-3 rounded-lg text-base font-body text-charcoal hover:text-copper hover:bg-copper/5 transition-colors"
               >
                 Cart
+              </Link>
+              <Link
+                href="/admin"
+                className="block mt-2 px-4 py-3 rounded-full text-base font-body text-center text-parchment bg-copper hover:bg-copper-dark transition-colors"
+              >
+                Login
               </Link>
             </div>
           </motion.div>

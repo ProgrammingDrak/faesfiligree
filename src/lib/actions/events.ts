@@ -3,6 +3,50 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
+import { computeProcessingFee } from "@/lib/constants";
+
+function parseNumber(value: FormDataEntryValue | null, fallback = 0) {
+  const parsed = parseFloat(String(value ?? ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function parseInteger(value: FormDataEntryValue | null): number | null {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parseEventFields(formData: FormData) {
+  const name = String(formData.get("name") ?? "").trim();
+  const startDate = String(formData.get("startDate") ?? "");
+  const endDate = String(formData.get("endDate") ?? "") || null;
+  const location = String(formData.get("location") ?? "").trim() || null;
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+  const attendeeCount = parseInteger(formData.get("attendeeCount"));
+  const travelHours = parseNumber(formData.get("travelHours"));
+  const setupHours = parseNumber(formData.get("setupHours"));
+  const sellingHours = parseNumber(formData.get("sellingHours"));
+
+  if (!name || !startDate) {
+    return { error: "Name and start date are required" };
+  }
+  if (travelHours < 0 || setupHours < 0 || sellingHours < 0) {
+    return { error: "Event time cannot be negative" };
+  }
+
+  return {
+    name,
+    startDate: new Date(startDate),
+    endDate: endDate ? new Date(endDate) : null,
+    location,
+    notes,
+    attendeeCount,
+    travelHours,
+    setupHours,
+    sellingHours,
+  };
+}
 
 function parsePartnerTerms(formData: FormData) {
   const partnerCompanyName = String(formData.get("partnerCompanyName") ?? "").trim();
@@ -24,24 +68,11 @@ function parsePartnerTerms(formData: FormData) {
 }
 
 export async function createEvent(formData: FormData) {
-  const name = formData.get("name") as string;
-  const startDate = formData.get("startDate") as string;
-  const endDate = (formData.get("endDate") as string) || null;
-  const location = (formData.get("location") as string) || null;
-  const notes = (formData.get("notes") as string) || null;
-
-  if (!name?.trim() || !startDate) {
-    return { error: "Name and start date are required" };
-  }
+  const fields = parseEventFields(formData);
+  if ("error" in fields) return { error: fields.error };
 
   const event = await prisma.event.create({
-    data: {
-      name: name.trim(),
-      startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
-      location,
-      notes,
-    },
+    data: fields,
   });
 
   revalidatePath("/admin/events");
@@ -49,25 +80,12 @@ export async function createEvent(formData: FormData) {
 }
 
 export async function updateEvent(id: string, formData: FormData) {
-  const name = formData.get("name") as string;
-  const startDate = formData.get("startDate") as string;
-  const endDate = (formData.get("endDate") as string) || null;
-  const location = (formData.get("location") as string) || null;
-  const notes = (formData.get("notes") as string) || null;
-
-  if (!name?.trim() || !startDate) {
-    return { error: "Name and start date are required" };
-  }
+  const fields = parseEventFields(formData);
+  if ("error" in fields) return { error: fields.error };
 
   await prisma.event.update({
     where: { id },
-    data: {
-      name: name.trim(),
-      startDate: new Date(startDate),
-      endDate: endDate ? new Date(endDate) : null,
-      location,
-      notes,
-    },
+    data: fields,
   });
 
   revalidatePath(`/admin/events/${id}`);
@@ -106,8 +124,8 @@ export async function removeEventExpense(id: string, eventId: string) {
 
 export async function addEventInventory(eventId: string, formData: FormData) {
   const productId = formData.get("productId") as string;
-  const quantityBrought = parseInt(formData.get("quantityBrought") as string || "0");
-  const priceAtEvent = Math.round(parseFloat(formData.get("priceAtEvent") as string || "0") * 100);
+  const quantityBrought = parseInt(String(formData.get("quantityBrought") ?? "0"), 10);
+  const priceAtEvent = Math.round(parseNumber(formData.get("priceAtEvent")) * 100);
 
   if (!productId || quantityBrought <= 0 || priceAtEvent <= 0) {
     return { error: "Product, quantity, and price are required" };
@@ -164,7 +182,8 @@ export async function removeEventInventory(id: string, eventId: string) {
 
 export async function recordEventSale(eventId: string, formData: FormData) {
   const inventoryId = formData.get("inventoryId") as string;
-  const quantitySold = parseInt(formData.get("quantitySold") as string || "0");
+  const quantitySold = parseInt(String(formData.get("quantitySold") ?? "0"), 10);
+  const paymentType = String(formData.get("paymentType") ?? "") || null;
 
   if (!inventoryId || quantitySold < 0) {
     return { error: "Inventory item and quantity are required" };
@@ -176,13 +195,6 @@ export async function recordEventSale(eventId: string, formData: FormData) {
   if (!inventory) return { error: "Inventory item not found" };
   if (quantitySold > inventory.quantityBrought) return { error: "Quantity sold cannot exceed quantity brought" };
 
-  // Update the inventory sold count
-  await prisma.eventInventory.update({
-    where: { id: inventoryId },
-    data: { quantitySold },
-  });
-
-  // Create/update sale record
   const existingSale = await prisma.sale.findFirst({
     where: { eventId, productId: inventory.productId },
   });
@@ -191,42 +203,61 @@ export async function recordEventSale(eventId: string, formData: FormData) {
   const previousRevenue = existingSale ? existingSale.quantity * existingSale.price : 0;
   const nextRevenue = quantitySold * inventory.priceAtEvent;
   const revenueDelta = nextRevenue - previousRevenue;
+  const processingFee = computeProcessingFee(paymentType, nextRevenue);
 
-  if (existingSale) {
-    await prisma.sale.update({
-      where: { id: existingSale.id },
-      data: { quantity: quantitySold, price: inventory.priceAtEvent },
-    });
-  } else {
-    await prisma.sale.create({
-      data: {
-        productId: inventory.productId,
-        eventId,
-        quantity: quantitySold,
-        price: inventory.priceAtEvent,
-      },
-    });
-  }
-
-  // Update product sold stats
-  if (quantityDelta !== 0 || revenueDelta !== 0) {
-    const product = await prisma.product.update({
-      where: { id: inventory.productId },
-      data: {
-        quantityAvailable: { decrement: quantityDelta },
-        soldCount: { increment: quantityDelta },
-        soldRevenue: { increment: revenueDelta },
-      },
+  await prisma.$transaction(async (tx) => {
+    await tx.eventInventory.update({
+      where: { id: inventoryId },
+      data: { quantitySold },
     });
 
-    await prisma.product.update({
-      where: { id: inventory.productId },
-      data: { inStock: product.quantityAvailable > 0 },
-    });
-  }
+    if (quantitySold === 0) {
+      if (existingSale) await tx.sale.delete({ where: { id: existingSale.id } });
+    } else if (existingSale) {
+      await tx.sale.update({
+        where: { id: existingSale.id },
+        data: {
+          quantity: quantitySold,
+          price: inventory.priceAtEvent,
+          paymentType,
+          processingFee,
+        },
+      });
+    } else {
+      await tx.sale.create({
+        data: {
+          productId: inventory.productId,
+          eventId,
+          quantity: quantitySold,
+          price: inventory.priceAtEvent,
+          paymentType,
+          processingFee,
+        },
+      });
+    }
+
+    if (quantityDelta !== 0 || revenueDelta !== 0) {
+      const product = await tx.product.findUnique({
+        where: { id: inventory.productId },
+        select: { quantityAvailable: true },
+      });
+      if (!product) throw new Error("Product not found");
+      const nextAvailable = Math.max(0, product.quantityAvailable - quantityDelta);
+      await tx.product.update({
+        where: { id: inventory.productId },
+        data: {
+          quantityAvailable: nextAvailable,
+          soldCount: { increment: quantityDelta },
+          soldRevenue: { increment: revenueDelta },
+          inStock: nextAvailable > 0,
+        },
+      });
+    }
+  });
 
   revalidatePath(`/admin/events/${eventId}`);
   revalidatePath("/admin/products");
+  revalidatePath("/admin/sales");
   revalidatePath("/shop");
   revalidatePath("/admin/analytics");
   return { success: true };

@@ -2,47 +2,19 @@ import Link from "next/link";
 import { prisma, isDatabaseConfigured } from "@/lib/db";
 import { formatPrice } from "@/lib/utils";
 import {
-  addProductToBuildQueue,
   completeBuild,
-  deleteProduct,
   removeBuildQueueItem,
   startBuild,
 } from "@/lib/actions/products";
-
-function getTotalCost(
-  product: {
-    materialCostLump: number | null;
-    laborHours: number;
-    productMaterials: { quantity: number; material: { costPerUnit: number } }[];
-  },
-  laborRate: number
-) {
-  const itemizedCost = product.productMaterials.reduce(
-    (sum, row) => sum + row.material.costPerUnit * row.quantity,
-    0
-  );
-  const supplyCost = product.materialCostLump ?? itemizedCost;
-  const laborCost = Math.round(product.laborHours * laborRate);
-  return { supplyCost, laborCost, totalCost: supplyCost + laborCost };
-}
+import { CategoryBoard, type CategoryCard } from "@/components/admin/CategoryBoard";
+import { ensureMerchCategories } from "@/lib/data/categories";
+import { getProductCost } from "@/lib/data/product-metrics";
+import { MERCH_CATEGORIES } from "@/lib/constants";
 
 function statusLabel(status: string) {
   if (status === "in_progress") return "Working";
   if (status === "completed") return "Built";
   return "Need to build";
-}
-
-function getBulkUnitPrice(product: {
-  price: number;
-  bulkPricingEnabled: boolean;
-  bulkPricingMode: string | null;
-  bulkDiscountPercent: number | null;
-  bulkUnitPrice: number | null;
-}) {
-  if (!product.bulkPricingEnabled) return null;
-  if (product.bulkPricingMode === "fixed") return product.bulkUnitPrice;
-  if (product.bulkDiscountPercent == null) return null;
-  return Math.round(product.price * (1 - product.bulkDiscountPercent / 100));
 }
 
 export default async function ProductsPage() {
@@ -60,6 +32,7 @@ export default async function ProductsPage() {
       orderBy: { createdAt: "desc" },
       include: {
         productMaterials: { include: { material: true } },
+        category: true,
       },
     }),
     prisma.productBuild.findMany({
@@ -78,13 +51,47 @@ export default async function ProductsPage() {
   const activeBuilds = buildQueue.filter((item) => item.status !== "completed");
   const completedBuilds = buildQueue.filter((item) => item.status === "completed").slice(0, 6);
 
+  await ensureMerchCategories();
+  const categories = await prisma.category.findMany();
+  const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
+
+  type ProductRow = (typeof products)[number];
+  const buildCard = (slug: string, title: string, items: ProductRow[]): CategoryCard => ({
+    slug,
+    title,
+    image: items.find((p) => p.images[0])?.images[0] ?? null,
+    itemCount: items.length,
+    availableUnits: items.reduce((sum, p) => sum + p.quantityAvailable, 0),
+    soldUnits: items.reduce((sum, p) => sum + p.soldCount, 0),
+    items: items.map((p) => ({
+      id: p.id,
+      name: p.name,
+      image: p.images[0] ?? null,
+      price: p.price,
+      hagglePrice: p.hagglePrice,
+      quantityAvailable: p.quantityAvailable,
+    })),
+  });
+
+  // One card per canonical category (even empty ones, so you can add into them),
+  // plus an "Uncategorized" bucket for anything without a category.
+  const categoryCards: CategoryCard[] = MERCH_CATEGORIES.map((mc) => {
+    const cat = categoryBySlug.get(mc.slug);
+    const items = cat ? products.filter((p) => p.categoryId === cat.id) : [];
+    return buildCard(mc.slug, mc.title, items);
+  });
+  const uncategorized = products.filter((p) => !p.categoryId);
+  if (uncategorized.length > 0) {
+    categoryCards.push(buildCard("uncategorized", "Uncategorized", uncategorized));
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="font-heading text-3xl text-warm-white">Inventory Library</h1>
           <p className="text-warm-white/50 text-sm mt-1">
-            Click a library card to queue another build, then add finished pieces to inventory.
+            New products start at 1 in stock. Use + Made and Sold to keep counts current.
           </p>
         </div>
         <Link
@@ -110,7 +117,7 @@ export default async function ProductsPage() {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {activeBuilds.map((item) => {
-              const { totalCost } = getTotalCost(item.product, laborRate);
+              const { totalCost } = getProductCost(item.product, laborRate);
               return (
                 <div
                   key={item.id}
@@ -197,130 +204,13 @@ export default async function ProductsPage() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-heading text-xl text-warm-white">Inventory Cards</h2>
-          <p className="text-warm-white/40 text-sm">{products.length} items</p>
+          <h2 className="font-heading text-xl text-warm-white">Categories</h2>
+          <p className="text-warm-white/40 text-sm">
+            Open a category to add or manage items. Hit Sold to pick what sold.
+          </p>
         </div>
 
-        {products.length === 0 ? (
-          <p className="text-warm-white/50">No inventory items yet.</p>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {products.map((product) => {
-              const { supplyCost, laborCost, totalCost } = getTotalCost(product, laborRate);
-              const queuedCount = activeBuilds
-                .filter((item) => item.productId === product.id)
-                .reduce((sum, item) => sum + item.quantity, 0);
-
-              return (
-                <article
-                  key={product.id}
-                  className="border border-warm-white/10 bg-warm-white/5 rounded-lg overflow-hidden"
-                >
-                  <div className="aspect-[4/3] bg-charcoal/70">
-                    {product.images[0] ? (
-                      <img
-                        src={product.images[0]}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-warm-white/25 text-sm">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  <div className="p-4 space-y-4">
-                    <div>
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="text-warm-white font-medium">{product.name}</h3>
-                        <span className={`text-xs px-2 py-0.5 rounded ${product.quantityAvailable > 0 ? "bg-green-500/20 text-green-400" : "bg-rose-gold/20 text-rose-gold"}`}>
-                          {product.quantityAvailable > 0 ? "Available" : "Out"}
-                        </span>
-                      </div>
-                      <p className="text-warm-white/45 text-sm">
-                        {product.inventoryLabel || "Inventory item"}
-                      </p>
-                      {product.isPartnerProduct && product.partnerCompanyName && (
-                        <p className="text-copper text-xs mt-1">
-                          Partner: {product.partnerCompanyName} · {product.partnerCommissionPercent ?? 0}%
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2 text-sm">
-                      <div>
-                        <p className="text-warm-white/35">Made</p>
-                        <p className="text-warm-white">{product.quantityMade}</p>
-                      </div>
-                      <div>
-                        <p className="text-warm-white/35">Available</p>
-                        <p className="text-warm-white">{product.quantityAvailable}</p>
-                      </div>
-                      <div>
-                        <p className="text-warm-white/35">Queued</p>
-                        <p className="text-warm-white">{queuedCount}</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 text-sm">
-                      <div className="rounded bg-warm-white/5 p-2">
-                        <p className="text-warm-white/35">Price</p>
-                        <p className="text-warm-white">{formatPrice(product.price)}</p>
-                        {product.bulkPricingEnabled && product.bulkMinQuantity && (
-                          <p className="text-copper text-xs">
-                            {product.bulkMinQuantity}+ for {formatPrice(getBulkUnitPrice(product) ?? product.price)} each
-                          </p>
-                        )}
-                      </div>
-                      <div className="rounded bg-warm-white/5 p-2">
-                        <p className="text-warm-white/35">Cost</p>
-                        <p className="text-warm-white">{formatPrice(totalCost)}</p>
-                        <p className="text-warm-white/35 text-xs">
-                          {formatPrice(supplyCost)} + {formatPrice(laborCost)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {product.labels.length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {product.labels.map((label) => (
-                          <span key={label} className="text-[11px] bg-warm-white/10 text-warm-white/50 px-1.5 py-0.5 rounded">
-                            {label}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <form action={async () => {
-                        "use server";
-                        await addProductToBuildQueue(product.id);
-                      }}>
-                        <button className="px-3 py-1.5 bg-copper hover:bg-copper-dark text-white rounded text-sm">
-                          Add to Build Queue
-                        </button>
-                      </form>
-                      <Link
-                        href={`/admin/products/${product.id}/edit`}
-                        className="px-3 py-1.5 bg-warm-white/10 hover:bg-warm-white/15 text-warm-white rounded text-sm"
-                      >
-                        Edit
-                      </Link>
-                      <form action={async () => {
-                        "use server";
-                        await deleteProduct(product.id);
-                      }}>
-                        <button className="text-rose-gold/70 hover:text-rose-gold text-sm">
-                          Delete
-                        </button>
-                      </form>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
+        <CategoryBoard categories={categoryCards} />
       </section>
     </div>
   );
