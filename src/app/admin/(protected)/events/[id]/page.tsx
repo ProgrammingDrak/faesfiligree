@@ -44,6 +44,7 @@ export default async function EventDetailPage({ params }: Props) {
 
   const laborRate = settings?.laborRate ?? 2500;
   const metrics = calculateEventMetrics(event, laborRate);
+  const saleByProductId = new Map(event.sales.map((sale) => [sale.productId, sale]));
 
   return (
     <div>
@@ -287,6 +288,7 @@ export default async function EventDetailPage({ params }: Props) {
             quantityBrought: i.quantityBrought,
             quantitySold: i.quantitySold,
             priceAtEvent: i.priceAtEvent,
+            paymentType: saleByProductId.get(i.productId)?.paymentType ?? null,
             partnerCompanyName: i.partnerCompanyName,
             partnerCommissionPercent: i.partnerCommissionPercent,
             partnerPricingNotes: i.partnerPricingNotes,

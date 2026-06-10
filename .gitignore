@@ -33,6 +33,7 @@ next-dev*.log
 
 # env files
 .env*.local
+.env*.bak
 
 # vercel
 .vercel

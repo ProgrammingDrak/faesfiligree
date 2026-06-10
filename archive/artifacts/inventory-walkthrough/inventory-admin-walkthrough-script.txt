@@ -1,0 +1,7 @@
+1. Start on New Product. This is where a new inventory item begins.
+2. Add the item name, choose a category, and let the SKU fill in automatically.
+3. Enter the list price, then uncheck discretion if you want to set a haggle floor.
+4. Choose Lump Sum and enter what the materials cost for this item.
+5. Add the build time. The site multiplies that by the labor rate in Settings.
+6. Review the pricing summary. Profit updates from list price minus materials and labor.
+7. When everything looks right, click Create Product to save the inventory item.

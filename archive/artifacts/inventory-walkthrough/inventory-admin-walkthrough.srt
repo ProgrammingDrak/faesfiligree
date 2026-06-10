@@ -1,0 +1,27 @@
+1
+00:00:00,000 --> 00:00:04,000
+Start on New Product. This is where a new inventory item begins.
+
+2
+00:00:04,000 --> 00:00:09,000
+Add the item name, choose a category, and let the SKU fill in automatically.
+
+3
+00:00:09,000 --> 00:00:14,000
+Enter the list price, then uncheck discretion if you want to set a haggle floor.
+
+4
+00:00:14,000 --> 00:00:19,000
+Choose Lump Sum and enter what the materials cost for this item.
+
+5
+00:00:19,000 --> 00:00:24,000
+Add the build time. The site multiplies that by the labor rate in Settings.
+
+6
+00:00:24,000 --> 00:00:30,000
+Review the pricing summary. Profit updates from list price minus materials and labor.
+
+7
+00:00:30,000 --> 00:00:34,000
+When everything looks right, click Create Product to save the inventory item.
