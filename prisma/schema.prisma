@@ -45,6 +45,7 @@ model Product {
   labels                   String[]          @default([])
   description              String?
   price                    Int
+  hagglePrice              Int?
   images                   String[]
   categoryId               String?
   category                 Category?         @relation(fields: [categoryId], references: [id])
@@ -161,17 +162,21 @@ model SiteSettings {
 }
 
 model Event {
-  id        String           @id @default(cuid())
-  name      String
-  startDate DateTime
-  endDate   DateTime?
-  location  String?
-  notes     String?
-  expenses  EventExpense[]
-  inventory EventInventory[]
-  sales     Sale[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
+  id            String           @id @default(cuid())
+  name          String
+  startDate     DateTime
+  endDate       DateTime?
+  location      String?
+  attendeeCount Int?
+  travelHours   Float            @default(0)
+  setupHours    Float            @default(0)
+  sellingHours  Float            @default(0)
+  notes         String?
+  expenses      EventExpense[]
+  inventory     EventInventory[]
+  sales         Sale[]
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@schema("faesfiligree")
 }
@@ -205,14 +210,16 @@ model EventInventory {
 }
 
 model Sale {
-  id        String   @id @default(cuid())
-  productId String
-  product   Product  @relation(fields: [productId], references: [id])
-  eventId   String?
-  event     Event?   @relation(fields: [eventId], references: [id])
-  quantity  Int      @default(1)
-  price     Int
-  date      DateTime @default(now())
+  id            String   @id @default(cuid())
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  eventId       String?
+  event         Event?   @relation(fields: [eventId], references: [id])
+  quantity      Int      @default(1)
+  price         Int
+  paymentType   String?
+  processingFee Int      @default(0)
+  date          DateTime @default(now())
 
   @@schema("faesfiligree")
 }

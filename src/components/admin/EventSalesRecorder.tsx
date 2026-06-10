@@ -1,6 +1,7 @@
 "use client";
 
 import { recordEventSale } from "@/lib/actions/events";
+import { PAYMENT_METHODS } from "@/lib/constants";
 import { formatPrice } from "@/lib/utils";
 
 interface InventoryItem {
@@ -63,7 +64,7 @@ export function EventSalesSection({ eventId, inventory }: EventSalesSectionProps
                   formData.set("inventoryId", item.id);
                   await recordEventSale(eventId, formData);
                 }}
-                className="flex items-center gap-2"
+                className="flex flex-wrap items-center justify-end gap-2"
               >
                 <label className="text-warm-white/50 text-xs">Sold:</label>
                 <input
@@ -74,6 +75,18 @@ export function EventSalesSection({ eventId, inventory }: EventSalesSectionProps
                   defaultValue={item.quantitySold}
                   className="w-16 px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
                 />
+                <select
+                  name="paymentType"
+                  defaultValue=""
+                  className="px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
+                >
+                  <option value="">Payment</option>
+                  {PAYMENT_METHODS.map((method) => (
+                    <option key={method.value} value={method.value}>
+                      {method.label}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="submit"
                   className="px-2 py-1 bg-copper/80 hover:bg-copper text-white rounded text-xs transition-colors"

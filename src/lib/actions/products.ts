@@ -2,8 +2,35 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/utils";
+import { generateSkuForCategory } from "@/lib/data/categories";
+import { computeProcessingFee } from "@/lib/constants";
+
+/**
+ * Lowest price the maker will accept when haggling. Null means it's left to
+ * the sales rep's discretion (either the discretion box is checked or no
+ * floor was entered).
+ */
+function parseHagglePrice(formData: FormData): number | null {
+  if (formData.get("haggleDiscretion") === "on") return null;
+  const cents = Math.round(parseNumber(formData.get("hagglePrice")) * 100);
+  return cents > 0 ? cents : null;
+}
+
+/**
+ * Resolve the inventory label to store: an explicit one wins, otherwise
+ * auto-generate the next SKU for the chosen category.
+ */
+async function resolveInventoryLabel(
+  inventoryLabel: string | null,
+  categoryId: string | null
+) {
+  if (inventoryLabel) return inventoryLabel;
+  if (categoryId) return generateSkuForCategory(categoryId);
+  return null;
+}
 
 function parseNumber(value: FormDataEntryValue | null, fallback = 0) {
   const parsed = parseFloat(String(value ?? ""));
@@ -105,14 +132,49 @@ function parseProductMaterials(value: FormDataEntryValue | null) {
   return Array.from(byMaterial, ([materialId, quantity]) => ({ materialId, quantity }));
 }
 
+async function findSingleActiveEventId(date = new Date()) {
+  const dayStart = new Date(date);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(date);
+  dayEnd.setHours(23, 59, 59, 999);
+
+  const events = await prisma.event.findMany({
+    where: {
+      startDate: { lte: dayEnd },
+      OR: [
+        { endDate: { gte: dayStart } },
+        { endDate: null, startDate: { gte: dayStart, lte: dayEnd } },
+      ],
+    },
+    select: { id: true },
+  });
+
+  return events.length === 1 ? events[0].id : null;
+}
+
+async function syncEventInventorySoldCount(
+  eventId: string,
+  productId: string,
+  tx: Prisma.TransactionClient
+) {
+  const sold = await tx.sale.aggregate({
+    where: { eventId, productId },
+    _sum: { quantity: true },
+  });
+
+  await tx.eventInventory.updateMany({
+    where: { eventId, productId },
+    data: { quantitySold: sold._sum.quantity ?? 0 },
+  });
+}
+
 export async function createProduct(formData: FormData) {
   const name = formData.get("name") as string;
-  const inventoryLabel = (formData.get("inventoryLabel") as string) || null;
+  const inventoryLabel = ((formData.get("inventoryLabel") as string) || "").trim() || null;
+  const categoryId = (formData.get("categoryId") as string) || null;
   const labels = (formData.get("labels") as string || "").split(",").map(label => label.trim()).filter(Boolean);
   const description = (formData.get("description") as string) || null;
   const price = Math.round(parseNumber(formData.get("price")) * 100);
-  const quantityMade = parseInteger(formData.get("quantityMade"), 1);
-  const quantityAvailable = parseInteger(formData.get("quantityAvailable"), quantityMade);
   const inStock = formData.get("inStock") === "on";
   const featured = formData.get("featured") === "on";
   const images = JSON.parse(formData.get("images") as string || "[]") as string[];
@@ -129,24 +191,26 @@ export async function createProduct(formData: FormData) {
 
   if (!name?.trim()) return { error: "Name is required" };
   if (price <= 0) return { error: "Price must be greater than 0" };
-  if (quantityMade < 0 || quantityAvailable < 0) return { error: "Quantities cannot be negative" };
   if ("error" in partnerTerms) return { error: partnerTerms.error };
   if ("error" in bulkPricing) return { error: bulkPricing.error };
+
+  const resolvedLabel = await resolveInventoryLabel(inventoryLabel, categoryId);
 
   await prisma.product.create({
     data: {
       name: name.trim(),
       slug: slugify(name),
-      inventoryLabel: inventoryLabel?.trim() || null,
+      inventoryLabel: resolvedLabel,
       labels,
       description,
       price,
+      hagglePrice: parseHagglePrice(formData),
       images,
-      categoryId: null,
+      categoryId,
       materials: [],
       dimensions: null,
-      quantityMade,
-      quantityAvailable,
+      quantityMade: 1,
+      quantityAvailable: 1,
       inStock,
       featured,
       isPartnerProduct: partnerTerms.isPartnerProduct,
@@ -177,12 +241,11 @@ export async function createProduct(formData: FormData) {
 
 export async function updateProduct(id: string, formData: FormData) {
   const name = formData.get("name") as string;
-  const inventoryLabel = (formData.get("inventoryLabel") as string) || null;
+  const inventoryLabel = ((formData.get("inventoryLabel") as string) || "").trim() || null;
+  const categoryId = (formData.get("categoryId") as string) || null;
   const labels = (formData.get("labels") as string || "").split(",").map(label => label.trim()).filter(Boolean);
   const description = (formData.get("description") as string) || null;
   const price = Math.round(parseNumber(formData.get("price")) * 100);
-  const quantityMade = parseInteger(formData.get("quantityMade"), 1);
-  const quantityAvailable = parseInteger(formData.get("quantityAvailable"), quantityMade);
   const inStock = formData.get("inStock") === "on";
   const featured = formData.get("featured") === "on";
   const images = JSON.parse(formData.get("images") as string || "[]") as string[];
@@ -199,9 +262,10 @@ export async function updateProduct(id: string, formData: FormData) {
 
   if (!name?.trim()) return { error: "Name is required" };
   if (price <= 0) return { error: "Price must be greater than 0" };
-  if (quantityMade < 0 || quantityAvailable < 0) return { error: "Quantities cannot be negative" };
   if ("error" in partnerTerms) return { error: partnerTerms.error };
   if ("error" in bulkPricing) return { error: bulkPricing.error };
+
+  const resolvedLabel = await resolveInventoryLabel(inventoryLabel, categoryId);
 
   // Delete existing product materials and recreate
   await prisma.productMaterial.deleteMany({ where: { productId: id } });
@@ -211,14 +275,13 @@ export async function updateProduct(id: string, formData: FormData) {
     data: {
       name: name.trim(),
       slug: slugify(name),
-      inventoryLabel: inventoryLabel?.trim() || null,
+      inventoryLabel: resolvedLabel,
       labels,
       description,
       price,
+      hagglePrice: parseHagglePrice(formData),
       images,
-      categoryId: null,
-      quantityMade,
-      quantityAvailable,
+      categoryId,
       inStock,
       featured,
       isPartnerProduct: partnerTerms.isPartnerProduct,
@@ -250,6 +313,128 @@ export async function updateProduct(id: string, formData: FormData) {
 export async function deleteProduct(id: string) {
   await prisma.product.delete({ where: { id } });
   revalidatePath("/admin/products");
+  revalidatePath("/shop");
+  return { success: true };
+}
+
+// --- Direct inventory adjustments -----------------------------------------
+
+/** Record newly made pieces: more made, more available, back in stock. */
+async function applyMade(productId: string, quantity: number) {
+  await prisma.product.update({
+    where: { id: productId },
+    data: {
+      quantityMade: { increment: quantity },
+      quantityAvailable: { increment: quantity },
+      inStock: true,
+    },
+  });
+}
+
+/**
+ * Record a sale: fewer available (never below 0), more sold + revenue.
+ * Revenue uses, in order of preference: an explicit unit price, the list
+ * price minus a discount %, or the plain list price.
+ */
+async function applySold(
+  productId: string,
+  quantity: number,
+  opts: {
+    unitPriceCents?: number;
+    discountPercent?: number;
+    paymentType?: string | null;
+    eventId?: string | null;
+  } = {}
+) {
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: { price: true, quantityAvailable: true },
+  });
+  if (!product) return;
+  const unit =
+    opts.unitPriceCents != null
+      ? Math.max(0, opts.unitPriceCents)
+      : Math.round(product.price * (1 - (opts.discountPercent ?? 0) / 100));
+  const unitPrice = Math.max(0, unit);
+  const paymentType = opts.paymentType ?? null;
+  const processingFee = computeProcessingFee(paymentType, unitPrice * quantity);
+  const newAvailable = Math.max(0, product.quantityAvailable - quantity);
+  const eventId = opts.eventId === undefined ? await findSingleActiveEventId() : opts.eventId;
+  await prisma.$transaction(async (tx) => {
+    await tx.product.update({
+      where: { id: productId },
+      data: {
+        quantityAvailable: newAvailable,
+        soldCount: { increment: quantity },
+        soldRevenue: { increment: unitPrice * quantity },
+        inStock: newAvailable > 0,
+      },
+    });
+    await tx.sale.create({
+      data: { productId, eventId, quantity, price: unitPrice, paymentType, processingFee },
+    });
+    if (eventId) {
+      await syncEventInventorySoldCount(eventId, productId, tx);
+    }
+  });
+}
+
+function validQuantity(quantity: number) {
+  return Number.isFinite(quantity) && quantity > 0;
+}
+
+export async function recordMade(productId: string, quantity: number) {
+  if (!validQuantity(quantity)) return { error: "Quantity must be greater than 0" };
+  await applyMade(productId, quantity);
+  revalidatePath("/admin/products");
+  revalidatePath("/shop");
+  return { success: true };
+}
+
+export async function recordSold(
+  productId: string,
+  quantity: number,
+  unitPriceCents?: number,
+  paymentType?: string | null,
+  eventId?: string | null
+) {
+  if (!validQuantity(quantity)) return { error: "Quantity must be greater than 0" };
+  await applySold(productId, quantity, { unitPriceCents, paymentType, eventId });
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/sales");
+  if (eventId) revalidatePath(`/admin/events/${eventId}`);
+  revalidatePath("/admin/events");
+  revalidatePath("/admin/analytics");
+  revalidatePath("/shop");
+  return { success: true };
+}
+
+export async function recordBulkMade(productIds: string[], quantity: number) {
+  if (!validQuantity(quantity)) return { error: "Quantity must be greater than 0" };
+  if (productIds.length === 0) return { error: "No products selected" };
+  await Promise.all(productIds.map((id) => applyMade(id, quantity)));
+  revalidatePath("/admin/products");
+  revalidatePath("/shop");
+  return { success: true };
+}
+
+export async function recordBulkSold(
+  productIds: string[],
+  quantity: number,
+  discountPercent?: number,
+  paymentType?: string | null,
+  eventId?: string | null
+) {
+  if (!validQuantity(quantity)) return { error: "Quantity must be greater than 0" };
+  if (productIds.length === 0) return { error: "No products selected" };
+  await Promise.all(
+    productIds.map((id) => applySold(id, quantity, { discountPercent, paymentType, eventId }))
+  );
+  revalidatePath("/admin/products");
+  revalidatePath("/admin/sales");
+  if (eventId) revalidatePath(`/admin/events/${eventId}`);
+  revalidatePath("/admin/events");
+  revalidatePath("/admin/analytics");
   revalidatePath("/shop");
   return { success: true };
 }

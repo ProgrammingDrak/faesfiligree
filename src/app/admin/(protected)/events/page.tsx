@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma, isDatabaseConfigured } from "@/lib/db";
 import { formatPrice } from "@/lib/utils";
+import { calculateEventMetrics } from "@/lib/data/event-metrics";
 
 export default async function EventsPage() {
   if (!isDatabaseConfigured()) {
@@ -38,9 +39,7 @@ export default async function EventsPage() {
       ) : (
         <div className="space-y-3">
           {events.map((event) => {
-            const totalExpenses = event.expenses.reduce((sum, e) => sum + e.amount, 0);
-            const totalRevenue = event.sales.reduce((sum, s) => sum + s.price * s.quantity, 0);
-            const profitLoss = totalRevenue - totalExpenses;
+            const metrics = calculateEventMetrics(event);
 
             return (
               <Link
@@ -58,10 +57,14 @@ export default async function EventsPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-warm-white/50 text-xs">Expenses: {formatPrice(totalExpenses)}</p>
-                    <p className="text-warm-white/50 text-xs">Revenue: {formatPrice(totalRevenue)}</p>
-                    <p className={`text-sm font-medium ${profitLoss >= 0 ? "text-green-400" : "text-rose-gold"}`}>
-                      {profitLoss >= 0 ? "+" : ""}{formatPrice(profitLoss)}
+                    <p className="text-warm-white/50 text-xs">Expenses: {formatPrice(metrics.totalExpenses)}</p>
+                    <p className="text-warm-white/50 text-xs">Revenue: {formatPrice(metrics.grossRevenue)}</p>
+                    <p className="text-warm-white/50 text-xs">
+                      {metrics.totalHours.toFixed(1)} hrs
+                      {event.attendeeCount != null && ` · ${event.attendeeCount} attendees`}
+                    </p>
+                    <p className={`text-sm font-medium ${metrics.profitAfterExpenses >= 0 ? "text-green-400" : "text-rose-gold"}`}>
+                      {metrics.profitAfterExpenses >= 0 ? "+" : ""}{formatPrice(metrics.profitAfterExpenses)}
                     </p>
                   </div>
                 </div>

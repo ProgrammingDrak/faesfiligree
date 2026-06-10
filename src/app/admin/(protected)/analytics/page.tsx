@@ -73,9 +73,11 @@ export default async function AnalyticsPage({ searchParams }: Props) {
         <StatCard
           label="Net Profit"
           value={formatPrice(analytics.netProfit)}
-          detail={analytics.grossRevenue > 0
-            ? `${Math.round((analytics.netProfit / analytics.grossRevenue) * 100)}% margin`
-            : undefined}
+          detail={
+            analytics.grossRevenue > 0
+              ? `${Math.round((analytics.netProfit / analytics.grossRevenue) * 100)}% margin · Fees: ${formatPrice(analytics.totalFees)} · Event overhead: ${formatPrice(analytics.totalEventCost + analytics.totalEventTimeValue)}`
+              : `Fees: ${formatPrice(analytics.totalFees)} · Event overhead: ${formatPrice(analytics.totalEventCost + analytics.totalEventTimeValue)}`
+          }
         />
       </div>
 
@@ -106,13 +108,15 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                   <th className="pb-2 text-warm-white/50 text-sm">Revenue</th>
                   <th className="pb-2 text-warm-white/50 text-sm">Materials</th>
                   <th className="pb-2 text-warm-white/50 text-sm">Labor</th>
+                  <th className="pb-2 text-warm-white/50 text-sm">Event Costs</th>
+                  <th className="pb-2 text-warm-white/50 text-sm">Event Time</th>
                   <th className="pb-2 text-warm-white/50 text-sm">Profit</th>
                   <th className="pb-2 text-warm-white/50 text-sm">Margin</th>
                 </tr>
               </thead>
               <tbody>
                 {analytics.productBreakdown.map((p) => {
-                  const profit = p.revenue - p.materialCost - p.laborCost;
+                  const profit = p.revenue - p.materialCost - p.laborCost - p.eventCost - p.eventTimeValue;
                   const margin = p.revenue > 0 ? Math.round((profit / p.revenue) * 100) : 0;
                   return (
                     <tr key={p.name} className="border-b border-warm-white/5">
@@ -121,6 +125,8 @@ export default async function AnalyticsPage({ searchParams }: Props) {
                       <td className="py-2 text-warm-white/70">{formatPrice(p.revenue)}</td>
                       <td className="py-2 text-warm-white/70">{formatPrice(p.materialCost)}</td>
                       <td className="py-2 text-warm-white/70">{formatPrice(p.laborCost)}</td>
+                      <td className="py-2 text-warm-white/70">{formatPrice(p.eventCost)}</td>
+                      <td className="py-2 text-warm-white/70">{formatPrice(p.eventTimeValue)}</td>
                       <td className={`py-2 ${profit >= 0 ? "text-green-400" : "text-rose-gold"}`}>
                         {formatPrice(profit)}
                       </td>

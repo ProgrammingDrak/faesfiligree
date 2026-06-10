@@ -3,12 +3,20 @@
 import Link from "next/link";
 import { useState } from "react";
 import { createProduct, updateProduct } from "@/lib/actions/products";
+import { uploadImage } from "@/lib/actions/upload";
+import { ImageUploader } from "@/components/admin/ImageUploader";
+import type { CategoryOption } from "@/lib/data/categories";
 
 interface MaterialOption {
   id: string;
   name: string;
   unit: string;
   costPerUnit: number;
+}
+
+function suggestSku(category: CategoryOption | undefined) {
+  if (!category) return "";
+  return `FF-${category.skuPrefix}-${String(category.nextNumber).padStart(3, "0")}`;
 }
 
 interface ProductMaterialRow {
@@ -23,9 +31,11 @@ interface ProductData {
   id: string;
   name: string;
   inventoryLabel: string | null;
+  categoryId: string | null;
   labels: string[];
   description: string | null;
   price: number;
+  hagglePrice: number | null;
   images: string[];
   materials: string[];
   dimensions: string | null;
@@ -51,7 +61,10 @@ interface ProductData {
 interface ProductFormProps {
   product?: ProductData;
   materials: MaterialOption[];
+  categories: CategoryOption[];
   laborRate: number;
+  defaultCategoryId?: string;
+  initialCostMode?: "lump" | "itemized";
 }
 
 function formatMoney(cents: number) {
@@ -89,17 +102,36 @@ function parseIntegerInput(value: string, fallback: number) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function ProductForm({ product, materials, laborRate }: ProductFormProps) {
-  const [images] = useState<string[]>(product?.images || []);
+export function ProductForm({ product, materials, categories, laborRate, defaultCategoryId, initialCostMode }: ProductFormProps) {
+  const [images, setImages] = useState<string[]>(product?.images || []);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const initialCategoryId = product?.categoryId ?? defaultCategoryId ?? "";
+  const [categoryId, setCategoryId] = useState(initialCategoryId);
+  const [sku, setSku] = useState(
+    product?.inventoryLabel ??
+      (product ? "" : suggestSku(categories.find((c) => c.id === initialCategoryId)))
+  );
+  // Track whether the SKU is still an auto-suggestion (vs. hand-edited), so
+  // changing category only overwrites a SKU the user hasn't customised.
+  const [autoSku, setAutoSku] = useState(!product?.inventoryLabel);
   const hasMaterialOptions = materials.length > 0;
   const initialLaborDuration = getInitialLaborDuration(product?.laborHours);
   const [costMode, setCostMode] = useState<"lump" | "itemized">(
-    product?.materialCostLump != null ? "lump" : "itemized"
+    product?.materialCostLump != null ? "lump" : initialCostMode ?? "itemized"
   );
   const [productMaterials, setProductMaterials] = useState<ProductMaterialRow[]>(
     product?.productMaterials || []
   );
   const [price, setPrice] = useState(product ? (product.price / 100).toFixed(2) : "");
+  const [hagglePrice, setHagglePrice] = useState(
+    product?.hagglePrice != null ? (product.hagglePrice / 100).toFixed(2) : ""
+  );
+  // Null haggle price means "sales rep decides". On a new product we default
+  // to leaving it to the rep until the maker sets a floor.
+  const [haggleDiscretion, setHaggleDiscretion] = useState(
+    product ? product.hagglePrice == null : true
+  );
   const [isPartnerProduct, setIsPartnerProduct] = useState(product?.isPartnerProduct ?? false);
   const [bulkPricingEnabled, setBulkPricingEnabled] = useState(product?.bulkPricingEnabled ?? false);
   const [bulkPricingMode, setBulkPricingMode] = useState<BulkPricingMode>(
@@ -117,8 +149,34 @@ export function ProductForm({ product, materials, laborRate }: ProductFormProps)
   );
   const [error, setError] = useState<string | null>(null);
 
+  const handleCategoryChange = (nextCategoryId: string) => {
+    setCategoryId(nextCategoryId);
+    if (autoSku || !sku.trim()) {
+      setSku(suggestSku(categories.find((c) => c.id === nextCategoryId)));
+      setAutoSku(true);
+    }
+  };
+
   const handleSubmit = async (formData: FormData) => {
-    formData.set("images", JSON.stringify(images));
+    setError(null);
+    setIsSaving(true);
+
+    let uploadedImages: string[] = [];
+    try {
+      uploadedImages = await Promise.all(
+        pendingFiles.map((file) => {
+          const uploadData = new FormData();
+          uploadData.set("file", file);
+          return uploadImage(uploadData);
+        })
+      );
+    } catch (err) {
+      setIsSaving(false);
+      setError(err instanceof Error ? err.message : "Could not upload photos");
+      return;
+    }
+
+    formData.set("images", JSON.stringify([...images, ...uploadedImages]));
     formData.set("costMode", costMode);
     formData.set("productMaterials", JSON.stringify(productMaterials));
     formData.set("laborHours", getLaborHours(laborAmount, laborUnit).toString());
@@ -127,7 +185,10 @@ export function ProductForm({ product, materials, laborRate }: ProductFormProps)
       ? await updateProduct(product.id, formData)
       : await createProduct(formData);
 
-    if (result?.error) setError(result.error);
+    if (result?.error) {
+      setIsSaving(false);
+      setError(result.error);
+    }
   };
 
   const addMaterialRow = () => {
@@ -197,29 +258,52 @@ export function ProductForm({ product, materials, laborRate }: ProductFormProps)
           />
         </div>
 
+        <div>
+          <label className="block text-sm text-warm-white/70 mb-1">Photos</label>
+          <ImageUploader
+            images={images}
+            onImagesChange={setImages}
+            pendingFiles={pendingFiles}
+            onPendingFilesChange={setPendingFiles}
+            hint="Shown on the shop listing and product page after save."
+          />
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">Category</label>
+            <select
+              name="categoryId"
+              value={categoryId}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            >
+              <option value="">Select a category…</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.title}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="block text-sm text-warm-white/70 mb-1">Inventory Label / SKU</label>
             <input
               name="inventoryLabel"
-              defaultValue={product?.inventoryLabel || ""}
-              placeholder="FF-NECKLACE-001"
+              value={sku}
+              onChange={(e) => {
+                setSku(e.target.value);
+                setAutoSku(false);
+              }}
+              placeholder="Auto-filled from category"
               className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
             />
-          </div>
-          <div>
-            <label className="block text-sm text-warm-white/70 mb-1">Labels / Tags</label>
-            <input
-              name="labels"
-              defaultValue={product?.labels.join(", ")}
-              placeholder="ready-to-ship, wire wrap, pendant"
-              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
-            />
+            <p className="mt-1 text-xs text-warm-white/40">
+              Set automatically when you pick a category. Edit if you need a custom code.
+            </p>
           </div>
         </div>
 
         <div>
-          <label className="block text-sm text-warm-white/70 mb-1">Description</label>
+          <label className="block text-sm text-warm-white/70 mb-1">Description (Optional)</label>
           <textarea
             name="description"
             defaultValue={product?.description || ""}
@@ -228,18 +312,54 @@ export function ProductForm({ product, materials, laborRate }: ProductFormProps)
           />
         </div>
 
-        <div>
-          <label className="block text-sm text-warm-white/70 mb-1">Price ($)</label>
-          <input
-            name="price"
-            type="number"
-            step="0.01"
-            min="0"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            required
-            className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-warm-white/70 mb-1">List Price ($)</label>
+            <input
+              name="price"
+              type="number"
+              step="0.01"
+              min="0"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              required
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
+            />
+          </div>
+          <div>
+            <label className="flex items-center gap-1.5 text-sm text-warm-white/70 mb-1">
+              Haggle Price ($)
+              <span className="group relative inline-flex">
+                <span className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-warm-white/40 text-[10px] text-warm-white/60">
+                  i
+                </span>
+                <span className="pointer-events-none absolute left-1/2 bottom-full z-10 mb-2 hidden w-64 -translate-x-1/2 rounded-lg border border-warm-white/15 bg-charcoal px-3 py-2 text-xs font-normal leading-snug text-warm-white/80 shadow-lg group-hover:block">
+                  The lowest you&apos;re willing to drop to in order to close a sale. The vendor encourages 20–30% off, but it&apos;s up to you. Check the box below to leave it to the sales rep&apos;s discretion instead.
+                </span>
+              </span>
+            </label>
+            <input
+              name="hagglePrice"
+              type="number"
+              step="0.01"
+              min="0"
+              value={haggleDiscretion ? "" : hagglePrice}
+              onChange={(e) => setHagglePrice(e.target.value)}
+              disabled={haggleDiscretion}
+              placeholder={haggleDiscretion ? "Sales rep's discretion" : "Lowest acceptable price"}
+              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper disabled:opacity-50"
+            />
+            <label className="mt-1.5 flex items-center gap-2 text-xs text-warm-white/60">
+              <input
+                name="haggleDiscretion"
+                type="checkbox"
+                checked={haggleDiscretion}
+                onChange={(e) => setHaggleDiscretion(e.target.checked)}
+                className="rounded border-warm-white/20"
+              />
+              Leave it to the discretion of the sales person
+            </label>
+          </div>
         </div>
 
         <div className="border border-warm-white/10 rounded-lg p-4 space-y-4">
@@ -354,31 +474,6 @@ export function ProductForm({ product, materials, laborRate }: ProductFormProps)
               </div>
             </div>
           )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-warm-white/70 mb-1">Quantity Made</label>
-            <input
-              name="quantityMade"
-              type="number"
-              min="0"
-              step="1"
-              defaultValue={product?.quantityMade ?? 1}
-              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-warm-white/70 mb-1">Quantity Available</label>
-            <input
-              name="quantityAvailable"
-              type="number"
-              min="0"
-              step="1"
-              defaultValue={product?.quantityAvailable ?? 1}
-              className="w-full px-3 py-2 bg-warm-white/10 border border-warm-white/20 rounded-lg text-warm-white focus:outline-none focus:ring-2 focus:ring-copper"
-            />
-          </div>
         </div>
 
         <div className="flex gap-6">
@@ -628,9 +723,10 @@ export function ProductForm({ product, materials, laborRate }: ProductFormProps)
 
       <button
         type="submit"
-        className="px-6 py-2.5 bg-copper hover:bg-copper-dark text-white rounded-lg font-medium transition-colors"
+        disabled={isSaving}
+        className="px-6 py-2.5 bg-copper hover:bg-copper-dark text-white rounded-lg font-medium transition-colors disabled:opacity-60"
       >
-        {product ? "Update Product" : "Create Product"}
+        {isSaving ? "Saving…" : product ? "Update Product" : "Create Product"}
       </button>
     </form>
   );

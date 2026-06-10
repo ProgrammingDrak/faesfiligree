@@ -1,5 +1,6 @@
 import { prisma, isDatabaseConfigured } from "@/lib/db";
 import { getLocalPublicGalleryPieces, hasLocalGalleryData } from "@/lib/local-gallery";
+import { calculateEventMetrics } from "@/lib/data/event-metrics";
 import type {
   Product,
   GalleryPiece,
@@ -330,6 +331,16 @@ export async function getMaterials() {
   return prisma.material.findMany({ orderBy: { name: "asc" } });
 }
 
+export async function getSales() {
+  return prisma.sale.findMany({
+    orderBy: { date: "desc" },
+    include: {
+      product: { select: { name: true, inventoryLabel: true } },
+      event: { select: { name: true } },
+    },
+  });
+}
+
 export async function getCommissions() {
   return prisma.commission.findMany({ orderBy: { createdAt: "desc" } });
 }
@@ -373,6 +384,12 @@ export async function getAnalyticsSummary(startDate?: Date, endDate?: Date) {
       product: {
         include: { productMaterials: { include: { material: true } } },
       },
+      event: {
+        include: {
+          expenses: true,
+          inventory: true,
+        },
+      },
     },
   });
 
@@ -384,6 +401,9 @@ export async function getAnalyticsSummary(startDate?: Date, endDate?: Date) {
   let grossRevenue = 0;
   let totalMaterialCost = 0;
   let totalLaborCost = 0;
+  let totalFees = 0;
+  let totalEventCost = 0;
+  let totalEventTimeValue = 0;
   const productBreakdown: Record<
     string,
     {
@@ -391,13 +411,38 @@ export async function getAnalyticsSummary(startDate?: Date, endDate?: Date) {
       revenue: number;
       materialCost: number;
       laborCost: number;
+      eventCost: number;
+      eventTimeValue: number;
       unitsSold: number;
     }
   > = {};
 
+  const eventSales = new Map<string, typeof sales>();
+  for (const sale of sales) {
+    if (!sale.eventId) continue;
+    eventSales.set(sale.eventId, [...(eventSales.get(sale.eventId) ?? []), sale]);
+  }
+
+  const eventMetrics = new Map<string, ReturnType<typeof calculateEventMetrics>>();
+  for (const [eventId, eventSaleRows] of eventSales.entries()) {
+    const event = eventSaleRows[0]?.event;
+    if (!event) continue;
+    eventMetrics.set(
+      eventId,
+      calculateEventMetrics(
+        {
+          ...event,
+          sales: eventSaleRows,
+        },
+        laborRate
+      )
+    );
+  }
+
   for (const sale of sales) {
     const revenue = sale.price * sale.quantity;
     grossRevenue += revenue;
+    totalFees += sale.processingFee;
 
     const product = sale.product;
     let materialCostPerUnit = 0;
@@ -412,9 +457,18 @@ export async function getAnalyticsSummary(startDate?: Date, endDate?: Date) {
     const laborCostPerUnit = product.laborHours * laborRate;
     const saleMaterialCost = materialCostPerUnit * sale.quantity;
     const saleLaborCost = laborCostPerUnit * sale.quantity;
+    const saleEventMetrics = sale.eventId ? eventMetrics.get(sale.eventId) : null;
+    const saleEventCost = saleEventMetrics
+      ? saleEventMetrics.costPerSoldUnit * sale.quantity
+      : 0;
+    const saleEventTimeValue = saleEventMetrics
+      ? saleEventMetrics.timeValuePerSoldUnit * sale.quantity
+      : 0;
 
     totalMaterialCost += saleMaterialCost;
     totalLaborCost += saleLaborCost;
+    totalEventCost += saleEventCost;
+    totalEventTimeValue += saleEventTimeValue;
 
     if (!productBreakdown[product.id]) {
       productBreakdown[product.id] = {
@@ -422,12 +476,16 @@ export async function getAnalyticsSummary(startDate?: Date, endDate?: Date) {
         revenue: 0,
         materialCost: 0,
         laborCost: 0,
+        eventCost: 0,
+        eventTimeValue: 0,
         unitsSold: 0,
       };
     }
     productBreakdown[product.id].revenue += revenue;
     productBreakdown[product.id].materialCost += saleMaterialCost;
     productBreakdown[product.id].laborCost += saleLaborCost;
+    productBreakdown[product.id].eventCost += saleEventCost;
+    productBreakdown[product.id].eventTimeValue += saleEventTimeValue;
     productBreakdown[product.id].unitsSold += sale.quantity;
   }
 
@@ -435,7 +493,16 @@ export async function getAnalyticsSummary(startDate?: Date, endDate?: Date) {
     grossRevenue,
     totalMaterialCost,
     totalLaborCost,
-    netProfit: grossRevenue - totalMaterialCost - totalLaborCost,
+    totalFees,
+    totalEventCost,
+    totalEventTimeValue,
+    netProfit:
+      grossRevenue -
+      totalMaterialCost -
+      totalLaborCost -
+      totalFees -
+      totalEventCost -
+      totalEventTimeValue,
     productBreakdown: Object.values(productBreakdown),
     salesByMonth: aggregateSalesByMonth(sales),
   };

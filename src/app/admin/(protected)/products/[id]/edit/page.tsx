@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma, isDatabaseConfigured } from "@/lib/db";
 import { ProductForm } from "@/components/admin/ProductForm";
+import { getMerchCategoryOptions } from "@/lib/data/categories";
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -19,6 +20,7 @@ export default async function EditProductPage({ params }: Props) {
 
   const materials = await prisma.material.findMany({ orderBy: { name: "asc" } });
   const settings = await prisma.siteSettings.findUnique({ where: { id: "singleton" } });
+  const categories = await getMerchCategoryOptions();
 
   return (
     <div>
@@ -32,6 +34,7 @@ export default async function EditProductPage({ params }: Props) {
           })),
         }}
         materials={materials}
+        categories={categories}
         laborRate={settings?.laborRate ?? 2500}
       />
     </div>

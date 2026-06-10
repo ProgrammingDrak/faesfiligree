@@ -73,6 +73,12 @@ export function Footer() {
             &copy; {currentYear} {SITE_NAME}. All rights reserved. Each piece is
             one-of-a-kind.
           </p>
+          <Link
+            href="/admin"
+            className="inline-block mt-2 text-xs text-warm-white/25 hover:text-copper transition-colors"
+          >
+            Admin
+          </Link>
         </div>
       </div>
     </footer>
