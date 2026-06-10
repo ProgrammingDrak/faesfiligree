@@ -1,44 +1,31 @@
-import { cookies } from "next/headers";
+import { currentUser } from "@clerk/nextjs/server";
 
-const SESSION_COOKIE = "admin_session";
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
-
-function getSessionToken(): string {
-  // A static token derived from the secret — both runtimes will produce the same value
-  const secret = process.env.ADMIN_SESSION_SECRET || "dev-secret-change-me";
-  return `session_${secret}`;
+/**
+ * Admin access is gated by Clerk email-code sign-in, restricted to the
+ * email address(es) in ADMIN_ALLOWED_EMAILS (comma-separated). This mirrors
+ * the Clerk instance-level allowlist and is the app-side source of truth.
+ */
+export function getAllowedAdminEmails(): string[] {
+  return (process.env.ADMIN_ALLOWED_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
 }
 
-export function verifyPassword(password: string): boolean {
-  const adminPassword = process.env.ADMIN_PASSWORD;
-  if (!adminPassword) return false;
-  return password === adminPassword;
+export function isAllowedAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  const allowed = getAllowedAdminEmails();
+  // If no allow-list is configured, fail closed (deny).
+  if (allowed.length === 0) return false;
+  return allowed.includes(email.toLowerCase());
 }
 
-export async function createSession(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, getSessionToken(), {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: SESSION_MAX_AGE,
-    path: "/",
-  });
-}
-
-export async function destroySession(): Promise<void> {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
-}
-
-export async function isAuthenticated(): Promise<boolean> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(SESSION_COOKIE);
-  if (!session) return false;
-  return session.value === getSessionToken();
-}
-
-export function verifySessionToken(cookieValue: string | undefined): boolean {
-  if (!cookieValue) return false;
-  return cookieValue === getSessionToken();
+/**
+ * Returns the signed-in admin's primary email if they are allow-listed,
+ * otherwise null. Use in server components / route handlers under /admin.
+ */
+export async function getAdminEmail(): Promise<string | null> {
+  const user = await currentUser();
+  const email = user?.primaryEmailAddress?.emailAddress ?? null;
+  return isAllowedAdminEmail(email) ? email : null;
 }

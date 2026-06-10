@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { SignOutButton } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
-import { logoutAction } from "@/lib/actions/auth";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: "grid" },
@@ -82,14 +82,14 @@ export function AdminSidebar() {
       </nav>
 
       <div className="p-4 border-t border-warm-white/10">
-        <form action={logoutAction}>
+        <SignOutButton redirectUrl="/admin/login">
           <button
-            type="submit"
+            type="button"
             className="w-full text-left text-sm text-warm-white/40 hover:text-warm-white transition-colors"
           >
             Sign Out
           </button>
-        </form>
+        </SignOutButton>
         <Link
           href="/"
           className="block text-xs text-warm-white/30 hover:text-warm-white/50 mt-2 transition-colors"

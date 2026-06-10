@@ -13,9 +13,16 @@ services:
         sync: false
       - key: DIRECT_URL
         sync: false
-      - key: ADMIN_PASSWORD
+      # Clerk email-code admin auth. Set production (pk_live_/sk_live_) keys here.
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
         sync: false
-      - key: ADMIN_SESSION_SECRET
-        generateValue: true
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        value: /admin/login
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        value: /admin/login
+      - key: ADMIN_ALLOWED_EMAILS
+        sync: false
       - key: NEXT_PUBLIC_SITE_URL
         value: https://faesfiligree.onrender.com
