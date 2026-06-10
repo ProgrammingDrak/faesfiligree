@@ -10,6 +10,7 @@ interface InventoryItem {
   quantityBrought: number;
   quantitySold: number;
   priceAtEvent: number;
+  paymentType: string | null;
   partnerCompanyName: string | null;
   partnerCommissionPercent: number | null;
   partnerPricingNotes: string | null;
@@ -77,7 +78,7 @@ export function EventSalesSection({ eventId, inventory }: EventSalesSectionProps
                 />
                 <select
                   name="paymentType"
-                  defaultValue=""
+                  defaultValue={item.paymentType ?? ""}
                   className="px-2 py-1 bg-warm-white/10 border border-warm-white/20 rounded text-warm-white text-sm"
                 >
                   <option value="">Payment</option>
