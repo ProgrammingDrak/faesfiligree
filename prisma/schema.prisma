@@ -215,11 +215,39 @@ model Sale {
   product       Product  @relation(fields: [productId], references: [id])
   eventId       String?
   event         Event?   @relation(fields: [eventId], references: [id])
+  orderId       String?
+  order         Order?   @relation(fields: [orderId], references: [id])
   quantity      Int      @default(1)
   price         Int
   paymentType   String?
   processingFee Int      @default(0)
   date          DateTime @default(now())
+
+  @@schema("faesfiligree")
+}
+
+// Online order placed through Square hosted checkout (Payment Links API).
+// Square owns the source of truth (payment, buyer email, shipping address,
+// receipt); this row links our ref to Square's order and groups the Sale
+// line items recorded once payment is confirmed. Buyer/shipping fields are
+// copied from Square at confirm time for convenience only.
+model Order {
+  id            String   @id @default(cuid())
+  ref           String   @unique
+  squareOrderId String?  @unique
+  status        String   @default("pending")
+  subtotal      Int
+  itemsSnapshot Json?
+  buyerName     String?
+  buyerEmail    String?
+  shippingLine1 String?
+  shippingLine2 String?
+  shippingCity  String?
+  shippingState String?
+  shippingZip   String?
+  sales         Sale[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@schema("faesfiligree")
 }

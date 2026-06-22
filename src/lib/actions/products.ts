@@ -344,6 +344,7 @@ async function applySold(
     discountPercent?: number;
     paymentType?: string | null;
     eventId?: string | null;
+    orderId?: string | null;
   } = {}
 ) {
   const product = await prisma.product.findUnique({
@@ -371,7 +372,15 @@ async function applySold(
       },
     });
     await tx.sale.create({
-      data: { productId, eventId, quantity, price: unitPrice, paymentType, processingFee },
+      data: {
+        productId,
+        eventId,
+        orderId: opts.orderId ?? null,
+        quantity,
+        price: unitPrice,
+        paymentType,
+        processingFee,
+      },
     });
     if (eventId) {
       await syncEventInventorySoldCount(eventId, productId, tx);
@@ -396,10 +405,11 @@ export async function recordSold(
   quantity: number,
   unitPriceCents?: number,
   paymentType?: string | null,
-  eventId?: string | null
+  eventId?: string | null,
+  orderId?: string | null
 ) {
   if (!validQuantity(quantity)) return { error: "Quantity must be greater than 0" };
-  await applySold(productId, quantity, { unitPriceCents, paymentType, eventId });
+  await applySold(productId, quantity, { unitPriceCents, paymentType, eventId, orderId });
   revalidatePath("/admin/products");
   revalidatePath("/admin/sales");
   if (eventId) revalidatePath(`/admin/events/${eventId}`);
