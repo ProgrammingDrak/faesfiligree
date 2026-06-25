@@ -41,3 +41,6 @@ next-dev*.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local AI tool settings (machine-specific, never shared)
+.claude/
