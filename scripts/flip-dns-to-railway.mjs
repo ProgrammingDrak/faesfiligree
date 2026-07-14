@@ -10,12 +10,13 @@
 // Records MUST stay grey-cloud (proxied:false) — see notes in
 // claude-brain/repos/faesfiligree.md (orange cloud => Cloudflare Error 1000).
 //
-// Auth: CLOUDFLARE_API_TOKEN env var, or CLOUDFLARE_API_TOKEN= line in
-// ~/portable-programming/.env. Token needs Zone.DNS edit on faesfiligree.com.
+// Auth: CLOUDFLARE_API_TOKEN env var, else the encrypted brain secrets store
+// key `cloudflare.dnsToken` (node claude-brain/scripts/secrets.mjs get ...).
+// Token needs Zone.DNS edit on faesfiligree.com.
 //
 //   node scripts/flip-dns-to-railway.mjs
 
-import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 
@@ -26,19 +27,18 @@ const RECORDS = [
 
 function loadToken() {
   if (process.env.CLOUDFLARE_API_TOKEN) return process.env.CLOUDFLARE_API_TOKEN;
-  const envPath = path.join(os.homedir(), "portable-programming", ".env");
+  const secretsTool = path.join(os.homedir(), "portable-programming", "claude-brain", "scripts", "secrets.mjs");
   try {
-    for (const line of fs.readFileSync(envPath, "utf8").split(/\r?\n/)) {
-      const m = line.match(/^CLOUDFLARE_API_TOKEN=(.+)$/);
-      if (m) return m[1].trim();
-    }
-  } catch { /* no .env */ }
-  return null;
+    return execFileSync("node", [secretsTool, "get", "cloudflare.dnsToken"], { encoding: "utf8" }).trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 const token = loadToken();
 if (!token) {
-  console.error("No CLOUDFLARE_API_TOKEN in env or ~/portable-programming/.env");
+  console.error("No token: set CLOUDFLARE_API_TOKEN env, or run");
+  console.error("  node claude-brain/scripts/secrets.mjs set cloudflare.dnsToken <token>");
   process.exit(1);
 }
 
