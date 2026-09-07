@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Local AI tool settings (machine-specific, never shared)
 .claude/
+
+# clerk configuration (can include secrets)
+/.clerk/

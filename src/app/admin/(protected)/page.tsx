@@ -50,6 +50,7 @@ export default async function AdminDashboard() {
           { href: "/admin/materials", label: "Manage Materials" },
           { href: "/admin/events/new", label: "Create Event" },
           { href: "/admin/analytics", label: "View Analytics" },
+          { href: "/admin/help", label: "Replay Help Walkthrough" },
           { href: "/admin/settings", label: "Site Settings" },
         ].map((action) => (
           <Link

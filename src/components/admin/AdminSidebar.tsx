@@ -14,6 +14,7 @@ const navItems = [
   { href: "/admin/commissions", label: "Commissions", icon: "mail" },
   { href: "/admin/events", label: "Events", icon: "calendar" },
   { href: "/admin/analytics", label: "Analytics", icon: "chart" },
+  { href: "/admin/help", label: "Help", icon: "help" },
   { href: "/admin/settings", label: "Settings", icon: "settings" },
 ];
 
@@ -27,6 +28,7 @@ function NavIcon({ name }: { name: string }) {
     calendar: "M3 6a2 2 0 012-2h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6zM16 2v4M8 2v4M3 10h18",
     chart: "M18 20V10M12 20V4M6 20v-6",
     tag: "M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82zM7 7h.01",
+    help: "M12 22a10 10 0 110-20 10 10 0 010 20zM9.5 9a2.5 2.5 0 015 0c0 2-2.5 2-2.5 4M12 17h.01",
     settings: "M12 15a3 3 0 100-6 3 3 0 000 6z",
   };
 
