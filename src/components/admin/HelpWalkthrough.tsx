@@ -58,14 +58,17 @@ export function HelpWalkthrough() {
   }, [activeIndex, activeStep.durationMs, isPlaying]);
 
   const goToStep = (index: number) => {
+    setIsPlaying(false);
     setActiveIndex(index);
   };
 
   const goBack = () => {
+    setIsPlaying(false);
     setActiveIndex((current) => Math.max(0, current - 1));
   };
 
   const goNext = () => {
+    setIsPlaying(false);
     setActiveIndex((current) => Math.min(inventoryWalkthroughSteps.length - 1, current + 1));
   };
 
@@ -83,14 +86,21 @@ export function HelpWalkthrough() {
             src={activeStep.image}
             alt={activeStep.alt}
             fill
-            priority={activeIndex === 0}
+            preload={activeIndex === 0}
             sizes="(min-width: 1280px) calc(100vw - 37rem), calc(100vw - 5rem)"
             className="object-contain"
           />
         </div>
 
         <div className="space-y-4 border-t border-warm-white/10 p-4">
-          <div className="h-1 overflow-hidden rounded-full bg-warm-white/10">
+          <div
+            aria-label="Walkthrough progress"
+            aria-valuemax={inventoryWalkthroughSteps.length}
+            aria-valuemin={1}
+            aria-valuenow={activeIndex + 1}
+            className="h-1 overflow-hidden rounded-full bg-warm-white/10"
+            role="progressbar"
+          >
             <div
               className="h-full rounded-full bg-copper transition-all duration-300"
               style={{ width: `${progress}%` }}
@@ -98,7 +108,7 @@ export function HelpWalkthrough() {
           </div>
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
+            <div aria-live="polite">
               <p className="text-xs uppercase text-copper">
                 Step {activeIndex + 1} of {inventoryWalkthroughSteps.length}
               </p>
@@ -158,6 +168,7 @@ export function HelpWalkthrough() {
             <button
               type="button"
               onClick={() => goToStep(index)}
+              aria-current={index === activeIndex ? "step" : undefined}
               className={cn(
                 "w-full rounded-lg border p-3 text-left transition-colors",
                 index === activeIndex
