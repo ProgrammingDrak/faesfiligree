@@ -52,11 +52,15 @@ export default async function CheckoutSuccessPage({
         <h1 className="font-heading text-4xl text-charcoal mb-4">
           {result.status === "pending"
             ? "Payment Not Completed"
+            : result.status === "error"
+              ? "Confirmation Delayed"
             : "Order Not Found"}
         </h1>
         <p className="text-charcoal/60 mb-10">
           {result.status === "pending"
             ? "It looks like this checkout wasn't finished. Your cart is still saved if you'd like to try again."
+            : result.status === "error"
+              ? "Square received your checkout, but we could not confirm it yet. Please contact us before trying again."
             : "We couldn't find an order for this link. If you believe you completed a payment, please contact us."}
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
 
   // Read the raw body so the signature can be verified over the exact bytes.
   const rawBody = await request.text();
+  if (rawBody.length > 262_144) {
+    return NextResponse.json({ error: "Webhook body is too large" }, { status: 413 });
+  }
   const signature = request.headers.get("x-square-hmacsha256-signature");
 
   if (!isValidSignature(rawBody, signature)) {

@@ -10,6 +10,8 @@ interface CheckoutItem {
   quantity: number;
 }
 
+const MAX_CHECKOUT_LINES = 50;
+
 function getCheckoutUnitPrice(product: {
   price: number;
   bulkPricingEnabled: boolean;
@@ -53,6 +55,9 @@ export async function startCheckout(items: CheckoutItem[]) {
   if (!Array.isArray(items) || !items.length) {
     return { error: "Your cart is empty." };
   }
+  if (items.length > MAX_CHECKOUT_LINES) {
+    return { error: "Your cart contains too many separate items." };
+  }
 
   let pendingOrderId: string | null = null;
   try {
@@ -61,6 +66,8 @@ export async function startCheckout(items: CheckoutItem[]) {
       if (
         !item ||
         typeof item.slug !== "string" ||
+        !item.slug ||
+        item.slug.length > 160 ||
         !Number.isInteger(item.quantity) ||
         item.quantity <= 0
       ) {
@@ -68,13 +75,20 @@ export async function startCheckout(items: CheckoutItem[]) {
       }
       quantities.set(item.slug, (quantities.get(item.slug) ?? 0) + item.quantity);
     }
+    if (quantities.size > MAX_CHECKOUT_LINES) {
+      return { error: "Your cart contains too many separate items." };
+    }
 
     // Validate prices and availability on the server.
     let totalAmount = 0;
     const orderLines: OrderLine[] = [];
+    const products = await prisma.product.findMany({
+      where: { slug: { in: [...quantities.keys()] } },
+    });
+    const productBySlug = new Map(products.map((product) => [product.slug, product]));
 
     for (const [slug, quantity] of quantities) {
-      const product = await prisma.product.findUnique({ where: { slug } });
+      const product = productBySlug.get(slug);
       if (!product) return { error: "A product in your cart is no longer available." };
       if (!product.inStock || product.quantityAvailable < quantity) {
         return { error: `${product.name} does not have enough stock for this order.` };
@@ -89,9 +103,17 @@ export async function startCheckout(items: CheckoutItem[]) {
         price: unitPrice,
       });
     }
+    if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
+      return { error: "Your cart total is invalid." };
+    }
 
     const ref = crypto.randomUUID();
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!configuredSiteUrl) throw new Error("NEXT_PUBLIC_SITE_URL is not configured");
+    const siteUrl = new URL(configuredSiteUrl);
+    if (process.env.NODE_ENV === "production" && siteUrl.protocol !== "https:") {
+      throw new Error("NEXT_PUBLIC_SITE_URL must use HTTPS in production");
+    }
 
     // Local pending row first, so a paid Square order can always be traced
     // back even if the buyer never returns to the success page.
@@ -121,7 +143,7 @@ export async function startCheckout(items: CheckoutItem[]) {
       },
       checkoutOptions: {
         askForShippingAddress: true,
-        redirectUrl: `${siteUrl}/checkout/success?ref=${ref}`,
+        redirectUrl: `${siteUrl.origin}/checkout/success?ref=${ref}`,
       },
       paymentNote: ref,
     });

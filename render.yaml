@@ -25,16 +25,13 @@ services:
       - key: ADMIN_ALLOWED_EMAILS
         sync: false
       # Square payments. Use PRODUCTION credentials here (the app selects the
-      # production Square environment when NODE_ENV=production). App ID +
-      # Location ID are public (NEXT_PUBLIC_), the access token + webhook
-      # signature key are secret.
+      # production Square environment when NODE_ENV=production). Location ID
+      # is public (NEXT_PUBLIC_). Keep both remaining values secret.
       - key: SQUARE_ACCESS_TOKEN
-        sync: false
-      - key: NEXT_PUBLIC_SQUARE_APP_ID
         sync: false
       - key: NEXT_PUBLIC_SQUARE_LOCATION_ID
         sync: false
       - key: SQUARE_WEBHOOK_SIGNATURE_KEY
         sync: false
       - key: NEXT_PUBLIC_SITE_URL
-        value: https://faesfiligree.onrender.com
+        value: https://faesfiligree.com
