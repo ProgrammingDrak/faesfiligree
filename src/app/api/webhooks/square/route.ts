@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { isSquareConfigured } from "@/lib/square/client";
-import { handlePaymentCompleted } from "@/lib/square/webhooks";
+import { handlePaymentEvent } from "@/lib/square/webhooks";
 
 /**
  * Verify the request really came from Square. Square signs each webhook with
@@ -11,9 +11,7 @@ import { handlePaymentCompleted } from "@/lib/square/webhooks";
  */
 function isValidSignature(rawBody: string, signature: string | null): boolean {
   const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
-  // No key configured → skip verification (e.g. local/sandbox). Set the key in
-  // production so forged webhooks are rejected.
-  if (!signatureKey) return true;
+  if (!signatureKey) return process.env.NODE_ENV !== "production";
   if (!signature) return false;
 
   const notificationUrl =
@@ -51,15 +49,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = JSON.parse(rawBody);
 
-    // Square sends webhook events with a `type` field
-    switch (body.type) {
-      case "payment.completed": {
-        await handlePaymentCompleted(body);
-        break;
-      }
-      default:
-        console.log(`Unhandled Square event type: ${body.type}`);
-    }
+    await handlePaymentEvent(body);
 
     return NextResponse.json({ received: true });
   } catch (error) {

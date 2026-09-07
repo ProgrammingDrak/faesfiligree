@@ -1,25 +1,23 @@
 "use server";
 
-import type { Square } from "square";
+import type { Prisma } from "@prisma/client";
 import { squareClient, isSquareConfigured } from "./client";
+import { confirmSquareOrder, type ConfirmOrderResult, type OrderLine } from "./orders";
 import { prisma } from "@/lib/db";
-import { getProductBySlug } from "@/lib/data/queries";
-import { recordSold } from "@/lib/actions/products";
 
 interface CheckoutItem {
   slug: string;
   quantity: number;
 }
 
-type OrderLine = {
-  productId: string;
-  name: string;
-  quantity: number;
+function getCheckoutUnitPrice(product: {
   price: number;
-};
-
-function getCheckoutUnitPrice(product: Awaited<ReturnType<typeof getProductBySlug>>, quantity: number) {
-  if (!product) return 0;
+  bulkPricingEnabled: boolean;
+  bulkMinQuantity: number | null;
+  bulkPricingMode: string | null;
+  bulkDiscountPercent: number | null;
+  bulkUnitPrice: number | null;
+}, quantity: number) {
   if (!product.bulkPricingEnabled || !product.bulkMinQuantity || quantity < product.bulkMinQuantity) {
     return product.price;
   }
@@ -52,27 +50,42 @@ export async function startCheckout(items: CheckoutItem[]) {
     return { error: "Square location ID is not configured." };
   }
 
-  if (!items.length) {
+  if (!Array.isArray(items) || !items.length) {
     return { error: "Your cart is empty." };
   }
 
+  let pendingOrderId: string | null = null;
   try {
-    // Validate prices server-side — never trust client-sent prices
+    const quantities = new Map<string, number>();
+    for (const item of items) {
+      if (
+        !item ||
+        typeof item.slug !== "string" ||
+        !Number.isInteger(item.quantity) ||
+        item.quantity <= 0
+      ) {
+        return { error: "Your cart contains an invalid quantity." };
+      }
+      quantities.set(item.slug, (quantities.get(item.slug) ?? 0) + item.quantity);
+    }
+
+    // Validate prices and availability on the server.
     let totalAmount = 0;
     const orderLines: OrderLine[] = [];
 
-    for (const item of items) {
-      const product = await getProductBySlug(item.slug);
-      if (!product) throw new Error(`Product not found: ${item.slug}`);
-      if (!product.inStock)
-        throw new Error(`Product out of stock: ${product.name}`);
+    for (const [slug, quantity] of quantities) {
+      const product = await prisma.product.findUnique({ where: { slug } });
+      if (!product) return { error: "A product in your cart is no longer available." };
+      if (!product.inStock || product.quantityAvailable < quantity) {
+        return { error: `${product.name} does not have enough stock for this order.` };
+      }
 
-      const unitPrice = getCheckoutUnitPrice(product, item.quantity);
-      totalAmount += unitPrice * item.quantity;
+      const unitPrice = getCheckoutUnitPrice(product, quantity);
+      totalAmount += unitPrice * quantity;
       orderLines.push({
-        productId: product._id,
+        productId: product.id,
         name: product.name,
-        quantity: item.quantity,
+        quantity,
         price: unitPrice,
       });
     }
@@ -87,9 +100,10 @@ export async function startCheckout(items: CheckoutItem[]) {
         ref,
         status: "pending",
         subtotal: totalAmount,
-        itemsSnapshot: orderLines,
+        itemsSnapshot: orderLines as unknown as Prisma.InputJsonValue,
       },
     });
+    pendingOrderId = order.id;
 
     const response = await squareClient.checkout.paymentLinks.create({
       idempotencyKey: ref,
@@ -109,148 +123,32 @@ export async function startCheckout(items: CheckoutItem[]) {
         askForShippingAddress: true,
         redirectUrl: `${siteUrl}/checkout/success?ref=${ref}`,
       },
+      paymentNote: ref,
     });
 
     const paymentLink = response.paymentLink;
-    if (!paymentLink?.url) {
-      throw new Error("Square did not return a checkout link.");
+    if (!paymentLink?.url || !paymentLink.orderId) {
+      throw new Error("Square did not return a complete checkout link.");
     }
 
     await prisma.order.update({
       where: { id: order.id },
-      data: { squareOrderId: paymentLink.orderId ?? null },
+      data: { squareOrderId: paymentLink.orderId },
     });
 
     return { success: true, url: paymentLink.url };
   } catch (error) {
     console.error("Square checkout link error:", error);
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to start checkout",
-    };
+    if (pendingOrderId) {
+      await prisma.order.updateMany({
+        where: { id: pendingOrderId, status: "pending" },
+        data: { status: "failed" },
+      }).catch((updateError) => console.error("Failed to mark checkout attempt:", updateError));
+    }
+    return { error: "Failed to start checkout. Please try again." };
   }
 }
 
-interface ConfirmedLine {
-  name: string;
-  quantity: number;
-  price: number;
-}
-
-export interface ConfirmOrderResult {
-  status: "paid" | "pending" | "not_found" | "error";
-  buyerEmail?: string | null;
-  items?: ConfirmedLine[];
-  subtotal?: number;
-}
-
-function isPaid(order: Square.Order | undefined): boolean {
-  if (!order) return false;
-  if (order.state === "COMPLETED") return true;
-  return (order.tenders?.length ?? 0) > 0;
-}
-
-/**
- * Called by the success page after Square redirects back. Verifies the
- * Square order is actually paid, then records the sale lines exactly once
- * (page refreshes and double-clicks must not double-record) and copies the
- * buyer/shipping details Square collected onto our local Order row.
- */
 export async function confirmOrder(ref: string): Promise<ConfirmOrderResult> {
-  if (!ref) return { status: "not_found" };
-  if (!isSquareConfigured() || !squareClient) return { status: "error" };
-
-  const order = await prisma.order.findUnique({ where: { ref } });
-  if (!order) return { status: "not_found" };
-
-  const lines = (order.itemsSnapshot ?? []) as unknown as OrderLine[];
-  const summary = {
-    items: lines.map(({ name, quantity, price }) => ({ name, quantity, price })),
-    subtotal: order.subtotal,
-  };
-
-  if (order.status === "paid") {
-    return { status: "paid", buyerEmail: order.buyerEmail, ...summary };
-  }
-  if (!order.squareOrderId) return { status: "pending", ...summary };
-
-  try {
-    const response = await squareClient.orders.get({
-      orderId: order.squareOrderId,
-    });
-    const squareOrder = response.order;
-    if (!isPaid(squareOrder)) {
-      return { status: "pending", ...summary };
-    }
-
-    // Claim the pending → paid transition atomically; whoever loses the
-    // race (concurrent refresh) returns without recording again.
-    const claimed = await prisma.order.updateMany({
-      where: { id: order.id, status: "pending" },
-      data: { status: "paid" },
-    });
-    if (claimed.count === 0) {
-      return { status: "paid", buyerEmail: order.buyerEmail, ...summary };
-    }
-
-    // Buyer + shipping as collected by Square's hosted page: prefer the
-    // shipment fulfillment recipient, fall back to the payment record.
-    let recipientName: string | null = null;
-    let recipientEmail: string | null = null;
-    let address: Square.Address | null | undefined = null;
-
-    const recipient = squareOrder?.fulfillments?.[0]?.shipmentDetails?.recipient;
-    if (recipient) {
-      recipientName = recipient.displayName ?? null;
-      recipientEmail = recipient.emailAddress ?? null;
-      address = recipient.address;
-    }
-    const paymentId = squareOrder?.tenders?.[0]?.paymentId;
-    if ((!recipientEmail || !address) && paymentId) {
-      try {
-        const paymentResponse = await squareClient.payments.get({ paymentId });
-        recipientEmail = recipientEmail ?? paymentResponse.payment?.buyerEmailAddress ?? null;
-        address = address ?? paymentResponse.payment?.shippingAddress;
-      } catch (paymentError) {
-        console.error(`Failed to fetch Square payment ${paymentId}:`, paymentError);
-      }
-    }
-
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        buyerName: recipientName,
-        buyerEmail: recipientEmail,
-        shippingLine1: address?.addressLine1 ?? null,
-        shippingLine2: address?.addressLine2 ?? null,
-        shippingCity: address?.locality ?? null,
-        shippingState: address?.administrativeDistrictLevel1 ?? null,
-        shippingZip: address?.postalCode ?? null,
-      },
-    });
-
-    // Payment is complete — record each line as a Square sale, which also
-    // decrements availability, bumps sold count/revenue, and flips
-    // one-of-a-kind pieces out of stock. eventId is explicitly null so web
-    // sales are never attributed to an in-person event. A bookkeeping
-    // failure here must NOT fail the customer (they already paid); log it
-    // for manual reconciliation instead.
-    for (const line of lines) {
-      try {
-        await recordSold(line.productId, line.quantity, line.price, "square", null, order.id);
-      } catch (recordError) {
-        console.error(
-          `Square order ${order.squareOrderId} paid but failed to record sale for product ${line.productId}:`,
-          recordError
-        );
-      }
-    }
-
-    return { status: "paid", buyerEmail: recipientEmail, ...summary };
-  } catch (error) {
-    console.error("Square order confirmation error:", error);
-    return { status: "error", ...summary };
-  }
+  return confirmSquareOrder(ref);
 }

@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { slugify } from "@/lib/utils";
 import { generateSkuForCategory } from "@/lib/data/categories";
-import { computeProcessingFee } from "@/lib/constants";
+import { recordInventorySale } from "@/lib/inventory/sales";
 
 /**
  * Lowest price the maker will accept when haggling. Null means it's left to
@@ -150,22 +149,6 @@ async function findSingleActiveEventId(date = new Date()) {
   });
 
   return events.length === 1 ? events[0].id : null;
-}
-
-async function syncEventInventorySoldCount(
-  eventId: string,
-  productId: string,
-  tx: Prisma.TransactionClient
-) {
-  const sold = await tx.sale.aggregate({
-    where: { eventId, productId },
-    _sum: { quantity: true },
-  });
-
-  await tx.eventInventory.updateMany({
-    where: { eventId, productId },
-    data: { quantitySold: sold._sum.quantity ?? 0 },
-  });
 }
 
 export async function createProduct(formData: FormData) {
@@ -347,44 +330,17 @@ async function applySold(
     orderId?: string | null;
   } = {}
 ) {
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    select: { price: true, quantityAvailable: true },
-  });
-  if (!product) return;
-  const unit =
-    opts.unitPriceCents != null
-      ? Math.max(0, opts.unitPriceCents)
-      : Math.round(product.price * (1 - (opts.discountPercent ?? 0) / 100));
-  const unitPrice = Math.max(0, unit);
-  const paymentType = opts.paymentType ?? null;
-  const processingFee = computeProcessingFee(paymentType, unitPrice * quantity);
-  const newAvailable = Math.max(0, product.quantityAvailable - quantity);
   const eventId = opts.eventId === undefined ? await findSingleActiveEventId() : opts.eventId;
   await prisma.$transaction(async (tx) => {
-    await tx.product.update({
-      where: { id: productId },
-      data: {
-        quantityAvailable: newAvailable,
-        soldCount: { increment: quantity },
-        soldRevenue: { increment: unitPrice * quantity },
-        inStock: newAvailable > 0,
-      },
+    await recordInventorySale(tx, {
+      productId,
+      quantity,
+      unitPriceCents: opts.unitPriceCents,
+      discountPercent: opts.discountPercent,
+      paymentType: opts.paymentType,
+      eventId,
+      orderId: opts.orderId,
     });
-    await tx.sale.create({
-      data: {
-        productId,
-        eventId,
-        orderId: opts.orderId ?? null,
-        quantity,
-        price: unitPrice,
-        paymentType,
-        processingFee,
-      },
-    });
-    if (eventId) {
-      await syncEventInventorySoldCount(eventId, productId, tx);
-    }
   });
 }
 

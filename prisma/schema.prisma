@@ -223,6 +223,7 @@ model Sale {
   processingFee Int      @default(0)
   date          DateTime @default(now())
 
+  @@unique([orderId, productId])
   @@schema("faesfiligree")
 }
 

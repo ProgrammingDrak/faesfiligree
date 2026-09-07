@@ -1,5 +1,5 @@
 // Seed test data into the LOCAL dev database only.
-// Run from the repo root: node --env-file=.env.local scripts/seed-local.ts
+// Run from the repo root: npm run seed:local
 //
 // Refuses to run against anything but localhost so it can never touch the
 // shared Supabase hub.

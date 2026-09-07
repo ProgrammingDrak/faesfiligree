@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "seed:local": "tsx scripts/seed-local.ts",
+    "verify:square-recording": "tsx scripts/verify-square-recording.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.4.3",
@@ -32,6 +34,7 @@
     "@types/react-dom": "^19.0.0",
     "prisma": "^7.5.0",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.7.0"
   }
 }
