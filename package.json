@@ -6,17 +6,19 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "tsc --noEmit",
+    "seed:local": "tsx scripts/seed-local.ts",
+    "verify:square-recording": "tsx scripts/verify-square-recording.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^7.4.3",
-    "@prisma/adapter-pg": "^7.5.0",
-    "@prisma/client": "^7.5.0",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "@vercel/blob": "^2.3.1",
     "clsx": "^2.1.1",
     "drake-auth": "github:ProgrammingDrak/drake-auth#v0.2.0",
     "framer-motion": "^11.15.0",
-    "next": "^15.1.0",
+    "next": "^16.3.4",
     "pg": "^8.21.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -30,8 +32,15 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "prisma": "^7.5.0",
+    "prisma": "^7.10.0",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.23.13",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "axios": "1.20.0",
+    "deepmerge-ts": "8.0.2",
+    "mysql2": "3.24.3",
+    "undici": "6.28.1"
   }
 }

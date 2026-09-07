@@ -1,15 +1,25 @@
 "use server";
 
+import type { Prisma } from "@prisma/client";
 import { squareClient, isSquareConfigured } from "./client";
-import { getProductBySlug } from "@/lib/data/queries";
+import { confirmSquareOrder, type ConfirmOrderResult, type OrderLine } from "./orders";
+import { prisma } from "@/lib/db";
 
 interface CheckoutItem {
   slug: string;
   quantity: number;
 }
 
-function getCheckoutUnitPrice(product: Awaited<ReturnType<typeof getProductBySlug>>, quantity: number) {
-  if (!product) return 0;
+const MAX_CHECKOUT_LINES = 50;
+
+function getCheckoutUnitPrice(product: {
+  price: number;
+  bulkPricingEnabled: boolean;
+  bulkMinQuantity: number | null;
+  bulkPricingMode: string | null;
+  bulkDiscountPercent: number | null;
+  bulkUnitPrice: number | null;
+}, quantity: number) {
   if (!product.bulkPricingEnabled || !product.bulkMinQuantity || quantity < product.bulkMinQuantity) {
     return product.price;
   }
@@ -22,10 +32,14 @@ function getCheckoutUnitPrice(product: Awaited<ReturnType<typeof getProductBySlu
   return product.price;
 }
 
-export async function createPayment(
-  sourceId: string,
-  items: CheckoutItem[]
-) {
+/**
+ * Create a Square-hosted checkout (Payment Links API) for the cart and
+ * return its URL. Square's hosted page handles card entry, buyer email,
+ * shipping address collection, and the receipt email. We validate prices
+ * server-side and keep a local pending Order keyed by our own `ref` so the
+ * success page can confirm payment and record the sale.
+ */
+export async function startCheckout(items: CheckoutItem[]) {
   if (!isSquareConfigured() || !squareClient) {
     return {
       error:
@@ -38,51 +52,125 @@ export async function createPayment(
     return { error: "Square location ID is not configured." };
   }
 
+  if (!Array.isArray(items) || !items.length) {
+    return { error: "Your cart is empty." };
+  }
+  if (items.length > MAX_CHECKOUT_LINES) {
+    return { error: "Your cart contains too many separate items." };
+  }
+
+  let pendingOrderId: string | null = null;
   try {
-    // Validate prices server-side — never trust client-sent prices
-    let totalAmount = 0;
-    const orderItems: { name: string; quantity: number; price: number }[] = [];
-
+    const quantities = new Map<string, number>();
     for (const item of items) {
-      const product = await getProductBySlug(item.slug);
-      if (!product) throw new Error(`Product not found: ${item.slug}`);
-      if (!product.inStock)
-        throw new Error(`Product out of stock: ${product.name}`);
+      if (
+        !item ||
+        typeof item.slug !== "string" ||
+        !item.slug ||
+        item.slug.length > 160 ||
+        !Number.isInteger(item.quantity) ||
+        item.quantity <= 0
+      ) {
+        return { error: "Your cart contains an invalid quantity." };
+      }
+      quantities.set(item.slug, (quantities.get(item.slug) ?? 0) + item.quantity);
+    }
+    if (quantities.size > MAX_CHECKOUT_LINES) {
+      return { error: "Your cart contains too many separate items." };
+    }
 
-      const unitPrice = getCheckoutUnitPrice(product, item.quantity);
-      totalAmount += unitPrice * item.quantity;
-      orderItems.push({
+    // Validate prices and availability on the server.
+    let totalAmount = 0;
+    const orderLines: OrderLine[] = [];
+    const products = await prisma.product.findMany({
+      where: { slug: { in: [...quantities.keys()] } },
+    });
+    const productBySlug = new Map(products.map((product) => [product.slug, product]));
+
+    for (const [slug, quantity] of quantities) {
+      const product = productBySlug.get(slug);
+      if (!product) return { error: "A product in your cart is no longer available." };
+      if (!product.inStock || product.quantityAvailable < quantity) {
+        return { error: `${product.name} does not have enough stock for this order.` };
+      }
+
+      const unitPrice = getCheckoutUnitPrice(product, quantity);
+      totalAmount += unitPrice * quantity;
+      orderLines.push({
+        productId: product.id,
         name: product.name,
-        quantity: item.quantity,
+        quantity,
         price: unitPrice,
       });
     }
+    if (!Number.isSafeInteger(totalAmount) || totalAmount <= 0) {
+      return { error: "Your cart total is invalid." };
+    }
 
-    const response = await squareClient.payments.create({
-      sourceId,
-      amountMoney: {
-        amount: BigInt(totalAmount),
-        currency: "USD",
+    const ref = crypto.randomUUID();
+    const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL;
+    if (!configuredSiteUrl) throw new Error("NEXT_PUBLIC_SITE_URL is not configured");
+    const siteUrl = new URL(configuredSiteUrl);
+    if (process.env.NODE_ENV === "production" && siteUrl.protocol !== "https:") {
+      throw new Error("NEXT_PUBLIC_SITE_URL must use HTTPS in production");
+    }
+
+    // Local pending row first, so a paid Square order can always be traced
+    // back even if the buyer never returns to the success page.
+    const order = await prisma.order.create({
+      data: {
+        ref,
+        status: "pending",
+        subtotal: totalAmount,
+        itemsSnapshot: orderLines as unknown as Prisma.InputJsonValue,
       },
-      locationId,
-      idempotencyKey: crypto.randomUUID(),
-      note: orderItems
-        .map((i) => `${i.name} x${i.quantity}`)
-        .join(", "),
+    });
+    pendingOrderId = order.id;
+
+    const response = await squareClient.checkout.paymentLinks.create({
+      idempotencyKey: ref,
+      order: {
+        locationId,
+        referenceId: ref,
+        lineItems: orderLines.map((line) => ({
+          name: line.name,
+          quantity: String(line.quantity),
+          basePriceMoney: {
+            amount: BigInt(line.price),
+            currency: "USD",
+          },
+        })),
+      },
+      checkoutOptions: {
+        askForShippingAddress: true,
+        redirectUrl: `${siteUrl.origin}/checkout/success?ref=${ref}`,
+      },
+      paymentNote: ref,
     });
 
-    // BigInt values can't be serialized to JSON directly
-    // In Square SDK v44, the response is the result directly
-    const paymentId = response.payment?.id;
+    const paymentLink = response.paymentLink;
+    if (!paymentLink?.url || !paymentLink.orderId) {
+      throw new Error("Square did not return a complete checkout link.");
+    }
 
-    return { success: true, paymentId: paymentId || null };
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { squareOrderId: paymentLink.orderId },
+    });
+
+    return { success: true, url: paymentLink.url };
   } catch (error) {
-    console.error("Square payment error:", error);
-    return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to process payment",
-    };
+    console.error("Square checkout link error:", error);
+    if (pendingOrderId) {
+      await prisma.order.updateMany({
+        where: { id: pendingOrderId, status: "pending" },
+        data: { status: "failed" },
+      }).catch((updateError) => console.error("Failed to mark checkout attempt:", updateError));
+    }
+    return { error: "Failed to start checkout. Please try again." };
   }
+}
+
+export async function confirmOrder(ref: string): Promise<ConfirmOrderResult> {
+  return confirmSquareOrder(ref);
 }
